@@ -733,8 +733,13 @@ const UI = (() => {
       screen.style.transform = 'scale(' + s + ')';
     }
     if (wr && wheel) {
-      const s = Math.min(wr.clientWidth / 236, wr.clientHeight / 236);
-      wheel.style.transform = 'scale(' + s + ')';
+      // Don't let the wheel grow to fill its whole region — reserve some
+      // height so a clear gap opens above it (detached from the screen), then
+      // bias it toward the bottom so it sits a touch lower.
+      const s = Math.min(wr.clientWidth / 236, (wr.clientHeight * 0.9) / 236);
+      const slack = wr.clientHeight - 236 * s;   // leftover vertical space
+      const drop = slack * 0.32;                 // push down (more gap above than below)
+      wheel.style.transform = 'translateY(' + drop + 'px) scale(' + s + ')';
     }
   }
 
