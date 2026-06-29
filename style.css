@@ -231,10 +231,14 @@ body {
 .homebar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 122px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.32); z-index: 48; }
 
 /* ---- full-screen app mode -----------------------------------------
-   On a real phone the OS already draws the status bar, notch and home
-   indicator, so hide the mock chrome and the mockup "desk" glows and let the
-   iPod fill the screen (see fitStage() in ui.js). */
-.statusbar, .island, .homebar, .glow { display: none; }
+   The real phone already provides the status bar, notch and home indicator,
+   and we don't want a fake "device" framing the UI. So hide all the mockup
+   chrome AND the metal body/bezel, leaving just the screen + click wheel on a
+   flat dark background, filled to the viewport (see fitStage() in ui.js). */
+.statusbar, .island, .homebar, .glow,
+.ipod-sheen, .ipod-bevel, .btn-side { display: none; }
+.ipod { background: none; box-shadow: none; padding: 0; }
+.ipod-inner { inset: 0; background: transparent; border-radius: 0; }
 
 /* ---- click-wheel tactile feedback + selection "tick" pulse --------- */
 .wheel-menu:active, .wheel-prev:active, .wheel-next:active, .wheel-play:active { color: rgba(255,255,255,0.95); }
