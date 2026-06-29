@@ -11,11 +11,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="iPod">
   <meta name="theme-color" content="#c6c9cf">
-  <link rel="manifest" href="manifest.json?v=29">
-  <link rel="apple-touch-icon" href="apple-touch-icon-v25.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192-v25.png">
+  <link rel="manifest" href="manifest.json?v=30">
+  <link rel="apple-touch-icon" href="apple-touch-icon-v30.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192-v30.png">
 
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <div id="scaler">
@@ -156,6 +156,12 @@
           <div class="list" id="list-devices"></div>
         </div>
 
+        <!-- volume HUD (press-and-hold the wheel, then circle) -->
+        <div class="vol-hud" id="vol-hud">
+          <span class="vol-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 5V4L8 9H4z"></path><path d="M16 8.5a4 4 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg></span>
+          <span class="vol-track"><span class="vol-fill" id="vol-fill"></span></span>
+        </div>
+
         <!-- toast overlay -->
         <div class="toast" id="toast"></div>
 
@@ -180,11 +186,11 @@
 </div><!-- /#scaler -->
 
   <!-- App modules (load order: config -> auth -> spotify -> player -> ui) -->
-  <script src="config.js?v=29"></script>
-  <script src="auth.js?v=29"></script>
-  <script src="spotify.js?v=29"></script>
-  <script src="player.js?v=29"></script>
-  <script src="ui.js?v=29"></script>
+  <script src="config.js?v=30"></script>
+  <script src="auth.js?v=30"></script>
+  <script src="spotify.js?v=30"></script>
+  <script src="player.js?v=30"></script>
+  <script src="ui.js?v=30"></script>
   <!-- Spotify Web Playback SDK (loaded after player.js defines the ready callback) -->
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </body>

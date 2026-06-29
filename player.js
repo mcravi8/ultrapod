@@ -147,5 +147,24 @@ const Player = (() => {
     return playing ? SpotifyAPI.pause() : SpotifyAPI.resume();
   }
 
-  return { start, previousTrack, nextTrack, togglePlay };
+  // ---- volume (click-wheel press-and-circle) -------------------------
+  // Desktop: the in-browser SDK player. iOS/remote: the active Connect device
+  // via the Web API. percent is 0..100.
+  function setVolume(percent) {
+    const v = Math.max(0, Math.min(100, percent));
+    if (_ready && _player) {
+      try { return Promise.resolve(_player.setVolume(v / 100)).then(() => true).catch(() => false); }
+      catch (e) { return Promise.resolve(false); }
+    }
+    return SpotifyAPI.setVolume(v);
+  }
+  function getVolume() {
+    if (_ready && _player) {
+      try { return Promise.resolve(_player.getVolume()).then(x => Math.round(x * 100)).catch(() => null); }
+      catch (e) { return Promise.resolve(null); }
+    }
+    return SpotifyAPI.getVolume();
+  }
+
+  return { start, previousTrack, nextTrack, togglePlay, setVolume, getVolume };
 })();

@@ -1077,6 +1077,50 @@ const UI = (() => {
     setInterval(() => { if (state.view === 'nowplaying') paintProgress(); }, 500);
   }
 
+  // ===================================================================
+  //  Volume: press-and-hold the wheel, then circle to change volume.
+  //  Holding still (no rotation) for HOLD_MS arms volume mode; rotating
+  //  before that is a normal scroll. Clockwise = louder.
+  // ===================================================================
+  const HOLD_MS = 450;          // press duration to arm volume mode
+  const VOL_STEP_DEG = 13;      // wheel degrees per volume step
+  const VOL_STEP = 4;           // volume % per step
+  let volMode = false, volLevel = 50, volAccum = 0;
+  let holdTimer = null, holdMoved = 0, volApplyTimer = null, volFailNoticed = false;
+
+  function showVolHud()   { const h = el('vol-hud'); if (h) h.classList.add('show'); updateVolHud(); }
+  function hideVolHud()   { const h = el('vol-hud'); if (h) h.classList.remove('show'); }
+  function updateVolHud() { const f = el('vol-fill'); if (f) f.style.width = clamp(volLevel, 0, 100) + '%'; }
+  function applyVol() {
+    Player.setVolume(volLevel).then(okk => {
+      if (okk === false && !volFailNoticed) { volFailNoticed = true; toast('Volume is locked on this device'); }
+    }).catch(() => {});
+  }
+  function scheduleVolApply() {
+    if (volApplyTimer) return;            // throttle: at most one PUT per ~110ms
+    volApplyTimer = setTimeout(() => { volApplyTimer = null; applyVol(); }, 110);
+  }
+  function volStep(dir) {
+    volLevel = clamp(volLevel + dir * VOL_STEP, 0, 100);
+    updateVolHud();
+    Feedback.tick();
+    scheduleVolApply();
+  }
+  function enterVolumeMode() {
+    holdTimer = null;
+    volMode = true; volAccum = 0; volFailNoticed = false;
+    wheelMoved = true;                    // swallow the click that follows pointerup
+    Feedback.haptic(18);
+    showVolHud();
+    Player.getVolume().then(v => { if (typeof v === 'number') { volLevel = v; updateVolHud(); } }).catch(() => {});
+  }
+  function exitVolumeMode() {
+    volMode = false;
+    if (volApplyTimer) { clearTimeout(volApplyTimer); volApplyTimer = null; }
+    applyVol();                           // make sure the final level sticks
+    setTimeout(hideVolHud, 650);
+  }
+
   let wheelMoved = false;
   function bindWheel() {
     const wheel = el('wheel');
@@ -1095,6 +1139,9 @@ const UI = (() => {
       Feedback.resume();                   // unlock audio within the gesture
       drag.active = true; drag.acc = 0; wheelMoved = false;
       drag.last = angleAt(e);
+      holdMoved = 0;
+      if (holdTimer) clearTimeout(holdTimer);
+      holdTimer = setTimeout(enterVolumeMode, HOLD_MS);   // hold still to arm volume
       try { wheel.setPointerCapture(e.pointerId); } catch (_) {}
     });
     wheel.addEventListener('pointermove', (e) => {
@@ -1102,7 +1149,25 @@ const UI = (() => {
       const a = angleAt(e);
       let d = a - drag.last;
       if (d > 180) d -= 360; if (d < -180) d += 360;
-      drag.acc += d; drag.last = a;
+      drag.last = a;
+
+      // Volume mode: circling adjusts volume instead of scrolling.
+      if (volMode) {
+        volAccum += d;
+        while (Math.abs(volAccum) >= VOL_STEP_DEG) {
+          const dir = volAccum > 0 ? 1 : -1;
+          volAccum -= dir * VOL_STEP_DEG;
+          volStep(dir);
+        }
+        e.preventDefault();
+        return;
+      }
+
+      // Rotating before the hold fires means it's a scroll, not a hold — cancel.
+      holdMoved += Math.abs(d);
+      if (holdMoved > 16 && holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+
+      drag.acc += d;
       while (Math.abs(drag.acc) >= STEP) {
         const dir = drag.acc > 0 ? 1 : -1;
         drag.acc -= dir * STEP;
@@ -1111,7 +1176,11 @@ const UI = (() => {
       }
       if (wheelMoved) e.preventDefault();
     });
-    const end = () => { drag.active = false; };
+    const end = () => {
+      drag.active = false;
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (volMode) exitVolumeMode();
+    };
     wheel.addEventListener('pointerup', end);
     wheel.addEventListener('pointercancel', end);
 

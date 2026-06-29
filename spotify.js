@@ -390,12 +390,28 @@ const SpotifyAPI = (() => {
   function next()     { return transport('/me/player/next',     'POST'); }
   function previous() { return transport('/me/player/previous', 'POST'); }
 
+  // ---- volume --------------------------------------------------------
+  // PUT /me/player/volume?volume_percent=N  (0..100) on the resolved device.
+  async function setVolume(percent, deviceId) {
+    const dev = deviceId || await resolveDeviceId();
+    const v = Math.max(0, Math.min(100, Math.round(percent)));
+    const res = await api('/me/player/volume?volume_percent=' + v + (dev ? '&device_id=' + dev : ''), { method: 'PUT' });
+    return ok(res);
+  }
+  // Current volume of the active device (0..100), or null if unknown.
+  async function getVolume() {
+    const data = await getJSON('/me/player');
+    if (data && data.device && typeof data.device.volume_percent === 'number') return data.device.volume_percent;
+    return null;
+  }
+
   return {
     setDeviceId, setPreferredDevice, getDevices,
     getPlaylists, getFollowedArtists, getSavedAlbums, getAlbumTracks,
     getSavedTracks, getRecentlyPlayed,
     getCurrentlyPlaying, search,
     playContext, playTracks, transferPlayback,
-    resume, pause, next, previous
+    resume, pause, next, previous,
+    setVolume, getVolume
   };
 })();
