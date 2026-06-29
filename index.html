@@ -11,11 +11,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="iPod">
   <meta name="theme-color" content="#c6c9cf">
-  <link rel="manifest" href="manifest.json?v=28">
+  <link rel="manifest" href="manifest.json?v=29">
   <link rel="apple-touch-icon" href="apple-touch-icon-v25.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192-v25.png">
 
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
 <div id="scaler">
@@ -73,6 +73,11 @@
             <div class="menu-item" data-idx="6">
               <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2"></circle></svg></span>
               <span class="mi-label">Albums</span>
+              <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+            </div>
+            <div class="menu-item" data-idx="7">
+              <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M7 20a4 4 0 0 0-4-4"></path><path d="M11.5 20a8.5 8.5 0 0 0-8.5-8.5"></path></svg></span>
+              <span class="mi-label">Devices</span>
               <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
             </div>
           </div>
@@ -146,6 +151,11 @@
           <div class="detail-tracks" id="detail-tracks"></div>
         </div>
 
+        <!-- ===== DEVICES (Spotify Connect picker) ===== -->
+        <div class="view" id="view-devices">
+          <div class="list" id="list-devices"></div>
+        </div>
+
         <!-- toast overlay -->
         <div class="toast" id="toast"></div>
 
@@ -170,11 +180,11 @@
 </div><!-- /#scaler -->
 
   <!-- App modules (load order: config -> auth -> spotify -> player -> ui) -->
-  <script src="config.js?v=28"></script>
-  <script src="auth.js?v=28"></script>
-  <script src="spotify.js?v=28"></script>
-  <script src="player.js?v=28"></script>
-  <script src="ui.js?v=28"></script>
+  <script src="config.js?v=29"></script>
+  <script src="auth.js?v=29"></script>
+  <script src="spotify.js?v=29"></script>
+  <script src="player.js?v=29"></script>
+  <script src="ui.js?v=29"></script>
   <!-- Spotify Web Playback SDK (loaded after player.js defines the ready callback) -->
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </body>

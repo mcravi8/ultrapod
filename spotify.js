@@ -25,7 +25,11 @@ const SpotifyAPI = (() => {
   // Cached briefly; re-resolved on demand or after a stale-device 404.
   let _fallbackId = null;
   let _fallbackAt = 0;
+  // The device the user explicitly chose in the Devices picker. When still
+  // available it overrides automatic selection so playback goes where they said.
+  let _preferredId = null;
   function setDeviceId(id) { _deviceId = id; _fallbackId = null; _fallbackAt = 0; }
+  function setPreferredDevice(id) { _preferredId = id; _fallbackId = null; _fallbackAt = 0; }
 
   // GET /v1/me/player/devices -> the user's available Connect devices.
   async function getDevices() {
@@ -51,13 +55,17 @@ const SpotifyAPI = (() => {
     // list for a few minutes after an old session — ignore it either way.
     devices = devices.filter(d => d && d.id && SDK_DEVICE_NAMES.indexOf(d.name) === -1);
     if (!devices.length) { _fallbackId = null; return null; }
-    // Prefer the already-active device (don't steal what's currently playing),
-    // then THIS phone (so an iPhone-held iPod plays through the phone), then any
-    // controllable (non-restricted) device, e.g. a paused speaker, then any.
+    // Order of preference:
+    //  1. the device the user picked in Devices (if still available),
+    //  2. the already-active device (don't steal what's currently playing),
+    //  3. THIS phone (so an iPhone-held iPod plays through the phone),
+    //  4. any controllable (non-restricted) device, e.g. a paused speaker,
+    //  5. anything.
+    const preferred = _preferredId && devices.find(d => d.id === _preferredId);
     const active = devices.find(d => d.is_active);
     const phone  = devices.find(d => !d.is_restricted && d.type === 'Smartphone');
     const free   = devices.find(d => !d.is_restricted);
-    const chosen = active || phone || free || devices[0];
+    const chosen = preferred || active || phone || free || devices[0];
     _fallbackId = (chosen && chosen.id) || null;
     return _fallbackId;
   }
@@ -314,7 +322,7 @@ const SpotifyAPI = (() => {
     // 404 with no resolvable device: the user genuinely has nowhere to play
     // (Spotify not open anywhere). Don't blame Premium.
     if (res.status === 404) {
-      if (window.UI && UI.toast) UI.toast('Open Spotify on a device, then try again');
+      if (window.UI && UI.toast) UI.toast('No active device — open Menu ▸ Devices to pick one');
       return false;
     }
 
@@ -355,7 +363,7 @@ const SpotifyAPI = (() => {
   function transportFail(status) {
     if (window.UI && UI.toast) {
       if (status === 403) UI.toast('Premium required for playback');
-      else if (status === 404) UI.toast('Open Spotify on a device, then try again');
+      else if (status === 404) UI.toast('No active device — open Menu ▸ Devices to pick one');
       else UI.toast('Playback unavailable');
     }
     return false;
@@ -383,7 +391,7 @@ const SpotifyAPI = (() => {
   function previous() { return transport('/me/player/previous', 'POST'); }
 
   return {
-    setDeviceId,
+    setDeviceId, setPreferredDevice, getDevices,
     getPlaylists, getFollowedArtists, getSavedAlbums, getAlbumTracks,
     getSavedTracks, getRecentlyPlayed,
     getCurrentlyPlaying, search,

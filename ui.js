@@ -31,7 +31,7 @@ const UI = (() => {
   const VIEW_ID = {
     menu: 'view-menu', nowplaying: 'view-nowplaying', coverflow: 'view-coverflow',
     playlists: 'view-playlists', artists: 'view-artists', albums: 'view-albums',
-    search: 'view-search', albumdetail: 'view-albumdetail'
+    search: 'view-search', albumdetail: 'view-albumdetail', devices: 'view-devices'
   };
 
   // ---- small helpers -------------------------------------------------
@@ -285,6 +285,7 @@ const UI = (() => {
       case 'artists':    loadArtists();   break;
       case 'albums':     loadAlbums();    break;
       case 'search':     enterSearch();   break;
+      case 'devices':    loadDevices();   break;
       // nowplaying: startNpPoll() above already does the first refresh.
     }
   }
@@ -298,7 +299,7 @@ const UI = (() => {
 
   // menu item activation
   function setMi(i) {
-    state.mi = clamp(i, 0, 6);
+    state.mi = clamp(i, 0, 7);
     document.querySelectorAll('#menu-sidebar .menu-item').forEach(node => {
       node.classList.toggle('active', +node.dataset.idx === state.mi);
     });
@@ -314,6 +315,7 @@ const UI = (() => {
       case 4: go('search');     break;
       case 5: go('artists');    break;
       case 6: go('albums');     break;
+      case 7: go('devices');    break;
     }
   }
 
@@ -476,6 +478,62 @@ const UI = (() => {
     state.albums.forEach((al, idx) => setArt(cont.querySelector('[data-art="' + idx + '"]'), al.image, al.id, 'album'));
     if (state.sel.albums == null) state.sel.albums = 0;
     applySel('albums');
+  }
+
+  // ===================================================================
+  //  Devices (Spotify Connect picker) — pick where playback happens.
+  //  On iPhone the iPod can't stream itself, so it drives a real device.
+  // ===================================================================
+  function deviceIcon(type) {
+    const t = (type || '').toLowerCase();
+    const wrap = (inner) => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    if (t === 'smartphone') return wrap('<rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><line x1="11" y1="18.5" x2="13" y2="18.5"></line>');
+    if (t === 'computer')   return wrap('<rect x="3" y="4" width="18" height="12" rx="2"></rect><line x1="8" y1="20" x2="16" y2="20"></line><line x1="12" y1="16" x2="12" y2="20"></line>');
+    if (['tv', 'castvideo', 'stb', 'gameconsole'].indexOf(t) >= 0) return wrap('<rect x="2.5" y="5" width="19" height="12" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line>');
+    if (['speaker', 'castaudio', 'audiodongle', 'avr', 'automobile'].indexOf(t) >= 0) return wrap('<rect x="6" y="2.5" width="12" height="19" rx="2.5"></rect><circle cx="12" cy="15" r="3.2"></circle><circle cx="12" cy="6.5" r="0.8"></circle>');
+    return wrap('<rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20l4-4 4 4"></path>');
+  }
+
+  async function loadDevices() {
+    const cont = el('list-devices');
+    cont.innerHTML = loadingHTML();
+    let devices = [];
+    try { devices = await SpotifyAPI.getDevices(); } catch (e) {}
+    // Hide our own phantom SDK device (current + legacy name) — it can't stream.
+    devices = (devices || []).filter(d => d && d.id && d.name !== 'iPod' && d.name !== 'UltraPod');
+    state.rows.devices = devices;
+    if (!devices.length) {
+      cont.innerHTML = emptyHTML('No Spotify devices found. Open Spotify on a computer, phone or speaker and start any song, then reopen Devices.');
+      return;
+    }
+    cont.innerHTML = devices.map((d, idx) =>
+      '<div class="list-row' + (d.is_active ? ' dev-active' : '') + '" data-idx="' + idx + '">' +
+        '<div class="dev-ico">' + deviceIcon(d.type) + '</div>' +
+        '<div class="dev-meta">' +
+          '<span class="dev-name">' + esc(d.name) + '</span>' +
+          '<span class="dev-sub">' + esc(d.type || 'Device') + (d.is_restricted ? ' · limited' : '') + '</span>' +
+        '</div>' +
+        (d.is_active
+          ? '<span class="dev-dot"></span>'
+          : '<span class="list-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>') +
+      '</div>'
+    ).join('');
+    // Default the highlight to the active device if there is one.
+    const ai = devices.findIndex(d => d.is_active);
+    state.sel.devices = ai >= 0 ? ai : 0;
+    applySel('devices');
+  }
+
+  function selectDevice(d) {
+    if (!d) return;
+    if (d.is_restricted) { toast("Can't control " + d.name + ' from here'); return; }
+    SpotifyAPI.setPreferredDevice(d.id);     // future plays target this device
+    toast('Playing on ' + d.name);
+    // Transfer + start (resumes a paused device), then show Now Playing.
+    SpotifyAPI.transferPlayback(d.id, true).then(ok => {
+      if (ok) { go('nowplaying'); }
+      else toast('Could not switch to ' + d.name);
+    }).catch(() => {});
   }
 
   // ===================================================================
@@ -861,7 +919,8 @@ const UI = (() => {
       artists: el('list-artists'),
       albums: el('grid-albums'),
       albumdetail: el('detail-tracks'),
-      search: el('search-results')
+      search: el('search-results'),
+      devices: el('list-devices')
     })[view];
   }
   function applySel(view) {
@@ -889,6 +948,7 @@ const UI = (() => {
     if (view === 'playlists')      { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
     else if (view === 'artists')   { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
     else if (view === 'albums')    { openAlbumDetail(item); }
+    else if (view === 'devices')   { selectDevice(item); }
     else if (view === 'albumdetail') {
       afterPlay(SpotifyAPI.playTracks(state.detailUris, idx));
       go('nowplaying');
@@ -931,7 +991,7 @@ const UI = (() => {
     }
     if (v === 'nowplaying') { Player.togglePlay(); return; }
     if (v === 'search') { searchCenter(); return; }
-    if (['playlists', 'artists', 'albums', 'albumdetail'].indexOf(v) >= 0) {
+    if (['playlists', 'artists', 'albums', 'albumdetail', 'devices'].indexOf(v) >= 0) {
       activate(v, state.sel[v] || 0);
     }
   }
@@ -960,7 +1020,7 @@ const UI = (() => {
       if (kbdOpen()) return;            // typing: the wheel is hidden, ignore stray scrolls
       node = searchScroll(delta);
       changed = node != null;
-    } else if (['playlists', 'artists', 'albums', 'albumdetail'].indexOf(v) >= 0) {
+    } else if (['playlists', 'artists', 'albums', 'albumdetail', 'devices'].indexOf(v) >= 0) {
       const rows = state.rows[v] || [];
       if (rows.length) {
         const before = state.sel[v] || 0;
@@ -1091,6 +1151,7 @@ const UI = (() => {
     el('list-artists').addEventListener('click', rowClick('artists'));
     el('grid-albums').addEventListener('click', rowClick('albums'));
     el('detail-tracks').addEventListener('click', rowClick('albumdetail'));
+    el('list-devices').addEventListener('click', rowClick('devices'));
 
     // Search results use the dedicated focus model (0 = box, 1.. = rows).
     el('search-results').addEventListener('click', (e) => {

@@ -126,7 +126,7 @@ body {
   box-shadow: 1px 0 0 rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
-.menu-item { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 50px; font-size: 13px; cursor: pointer; }
+.menu-item { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 47px; font-size: 13px; cursor: pointer; }
 .menu-item .mi-icon  { display: flex; color: #8e8e94; }
 .menu-item .mi-label { flex: 1; color: #dadade; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-item .mi-chev  { display: flex; color: #5f5f66; }
@@ -189,6 +189,13 @@ body {
 .list-chev { display: flex; color: #5f5f66; }
 
 .list.artists .list-row { height: 54px; }
+/* device picker rows */
+.dev-ico { width: 38px; height: 38px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center; color: #c4c4cc; background: rgba(255,255,255,0.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+.list-row.dev-active .dev-ico { color: #1ed760; }
+.dev-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dev-meta .dev-name { font-size: 13px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-meta .dev-sub  { font-size: 11px; color: #8e8e94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-dot { width: 8px; height: 8px; border-radius: 50%; background: #1ed760; flex: none; margin-right: 4px; box-shadow: 0 0 7px rgba(30,215,96,0.85); }
 .list.artists .list-art { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
 
 /* ============================================================
