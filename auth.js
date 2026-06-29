@@ -150,6 +150,10 @@ const Auth = (() => {
       response_type: 'code',
       redirect_uri: CONFIG.REDIRECT_URI,
       scope: CONFIG.SCOPES,
+      // Force the consent screen so a returning user with a narrower prior grant
+      // actually re-approves and is issued a token with ALL current scopes
+      // (a silent re-auth can otherwise reuse the old, narrower grant).
+      show_dialog: 'true',
       code_challenge_method: 'S256',
       code_challenge: challenge,
       state
