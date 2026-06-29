@@ -22,52 +22,35 @@ body {
 
 @keyframes upblink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
 
-/* ---- viewport scaler / fixed design stage -------------------------- */
-#scaler { position: fixed; inset: 0; overflow: hidden; background: #0a0a0c; }
-
-.stage {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 720px;
-  height: 1100px;
-  transform: translate(-50%, -50%) scale(1);
-  transform-origin: center center;
-  overflow: hidden;
-  background: #0a0a0c;
+/* ---- fluid full-screen layout -------------------------------------
+   Two stacked regions fill the viewport: the display (top) and the click
+   wheel (bottom). Each holds a fixed design-size element that ui.js scales
+   (CSS transform) to fill its region — so the UI fills ANY screen (Safari,
+   standalone PWA, desktop) top-to-bottom, with no fake device frame. */
+#scaler {
+  position: fixed; inset: 0; overflow: hidden; background: #0a0a0c;
+  display: flex; justify-content: center;
+}
+#app {
+  width: 100%; max-width: 460px; height: 100%;
+  display: flex; flex-direction: column; align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) env(safe-area-inset-right, 0px)
+           calc(env(safe-area-inset-bottom, 0px) + 10px) env(safe-area-inset-left, 0px);
+}
+#screen-region {
+  flex: 1 1 60%; width: 100%; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+#wheel-region {
+  flex: 0 0 40%; width: 100%; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
 }
 
-/* ---- ambient glow blobs -------------------------------------------- */
-.glow { position: absolute; pointer-events: none; }
-.glow-blue   { top: 120px; left: 10px; width: 360px; height: 560px; background: radial-gradient(ellipse at center, rgba(40,60,120,0.16), transparent 65%); filter: blur(40px); }
-.glow-purple { bottom: 90px; right: 0; width: 360px; height: 560px; background: radial-gradient(ellipse at center, rgba(30,170,85,0.15), transparent 65%); filter: blur(40px); }
-.glow-shadow { bottom: 120px; left: 50%; transform: translateX(-50%); width: 400px; height: 90px; background: radial-gradient(ellipse at center, rgba(0,0,0,0.7), transparent 72%); filter: blur(30px); }
-
-/* ---- iPod metal body ----------------------------------------------- */
-.ipod {
-  position: absolute; left: 50%; top: 146px; transform: translateX(-50%);
-  width: 384px; height: 808px; border-radius: 58px;
-  background: linear-gradient(100deg, #9498a1 0%, #45454c 4%, #2b2b2f 10%, #232327 50%, #2b2b2f 90%, #45454c 96%, #9498a1 100%);
-  box-shadow: 0 50px 110px -24px rgba(0,0,0,0.85), 0 24px 56px -14px rgba(0,0,0,0.7), inset 0 2px 1px rgba(255,255,255,0.34), inset 0 -3px 4px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.14);
-  padding: 4px;
-}
-
-/* metal side buttons */
-.btn-side { position: absolute; z-index: 2; }
-.btn-side.left  { left: -2.5px;  width: 5px; border-radius: 3px 1px 1px 3px; background: linear-gradient(90deg,#8b8b94,#2b2b2f);  box-shadow: -1px 0 2px rgba(0,0,0,0.5), inset 1px 0 1px rgba(255,255,255,0.35); }
-.btn-side.right { right: -2.5px; width: 5px; border-radius: 1px 3px 3px 1px; background: linear-gradient(270deg,#8b8b94,#2b2b2f); box-shadow: 1px 0 2px rgba(0,0,0,0.5), inset -1px 0 1px rgba(255,255,255,0.35); }
-.btn-mute  { top: 150px; height: 26px; }
-.btn-volup { top: 198px; height: 48px; }
-.btn-voldn { top: 256px; height: 48px; }
-.btn-power { top: 228px; height: 74px; }
-
-.ipod-sheen { position: absolute; inset: 0; border-radius: 58px; background: linear-gradient(125deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 20%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.12) 100%); pointer-events: none; z-index: 1; }
-.ipod-bevel { position: absolute; inset: 4px; border-radius: 54px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9), inset 0 0 0 2.5px rgba(255,255,255,0.1), inset 0 1px 2px rgba(255,255,255,0.14); pointer-events: none; z-index: 60; }
-.ipod-inner { position: absolute; inset: 8px; border-radius: 50px; overflow: hidden; background: #000; }
-
-/* ---- the screen / content panel ------------------------------------ */
+/* ---- the screen / content panel (fixed design size, scaled to fit) -- */
 .screen {
-  position: absolute; top: 52px; left: 12px; right: 12px; height: 412px;
+  position: relative; flex: none;
+  width: 360px; height: 412px;
+  transform-origin: center center;        /* transform: scale() set by ui.js */
   border-radius: 30px; overflow: hidden; background: #000;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07), inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 18px rgba(0,0,0,0.5);
 }
@@ -208,9 +191,10 @@ body {
 /* ============================================================
    CLICK WHEEL
    ============================================================ */
-.wheel-area { position: absolute; top: 460px; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; z-index: 15; }
+/* fixed design-size wheel; ui.js scales it to fill #wheel-region */
 .wheel {
-  position: relative; width: 236px; height: 236px; border-radius: 50%;
+  position: relative; flex: none; transform-origin: center center;
+  width: 236px; height: 236px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   background: radial-gradient(circle at 50% 30%, #242428, #18181b 56%, #0c0c0e);
   box-shadow: inset 0 2px 4px rgba(255,255,255,0.07), inset 0 -12px 26px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.05), 0 10px 26px -6px rgba(0,0,0,0.5);
@@ -221,24 +205,6 @@ body {
 .wheel-prev { position: absolute; top: 50%; left: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
 .wheel-play { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,0.55); }
 .wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 66%, #2b2b2f 0%, #161619 58%, #0b0b0d 100%); box-shadow: inset 0 7px 12px rgba(0,0,0,0.78), inset 0 -4px 6px rgba(255,255,255,0.07), inset 0 0 0 1px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06); }
-
-/* ---- status bar / dynamic island / home bar ------------------------ */
-.statusbar { position: absolute; top: 0; left: 0; right: 0; height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; z-index: 45; }
-.status-time { font-size: 14px; font-weight: 600; color: #fff; padding-top: 8px; }
-.status-icons { display: flex; align-items: center; gap: 7px; padding-top: 8px; }
-.island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 33px; border-radius: 18px; background: #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); z-index: 48; }
-.island-cam { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #2a2a3a, #050507); }
-.homebar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 122px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.32); z-index: 48; }
-
-/* ---- full-screen app mode -----------------------------------------
-   The real phone already provides the status bar, notch and home indicator,
-   and we don't want a fake "device" framing the UI. So hide all the mockup
-   chrome AND the metal body/bezel, leaving just the screen + click wheel on a
-   flat dark background, filled to the viewport (see fitStage() in ui.js). */
-.statusbar, .island, .homebar, .glow,
-.ipod-sheen, .ipod-bevel, .btn-side { display: none; }
-.ipod { background: none; box-shadow: none; padding: 0; }
-.ipod-inner { inset: 0; background: transparent; border-radius: 0; }
 
 /* ---- click-wheel tactile feedback + selection "tick" pulse --------- */
 .wheel-menu:active, .wheel-prev:active, .wheel-next:active, .wheel-play:active { color: rgba(255,255,255,0.95); }

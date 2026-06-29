@@ -617,14 +617,19 @@ const UI = (() => {
   // ===================================================================
   //  Wiring: scaling, clock, wheel gestures, buttons, inputs
   // ===================================================================
+  // Scale the fixed-design screen (360x412) and wheel (236) to fill their
+  // flex regions, so the whole UI fills any viewport top-to-bottom.
   function fitStage() {
-    const stage = el('stage');
-    // Scale so the iPod itself (centered in the 720x1100 stage) fills the
-    // screen, rather than fitting the whole mockup "desk" with big margins.
-    // The padding leaves a little breathing room and clears the notch / home bar.
-    const IPOD_W = 384 + 14, IPOD_H = 808 + 30;
-    const s = Math.min(window.innerWidth / IPOD_W, window.innerHeight / IPOD_H);
-    stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+    const screen = el('screen'), wheel = el('wheel');
+    const sr = el('screen-region'), wr = el('wheel-region');
+    if (sr && screen) {
+      const s = Math.min(sr.clientWidth / 360, sr.clientHeight / 412);
+      screen.style.transform = 'scale(' + s + ')';
+    }
+    if (wr && wheel) {
+      const s = Math.min(wr.clientWidth / 236, wr.clientHeight / 236);
+      wheel.style.transform = 'scale(' + s + ')';
+    }
   }
 
   function startClock() {
