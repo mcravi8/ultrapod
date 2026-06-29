@@ -537,14 +537,13 @@ const UI = (() => {
   let searchSeq = 0;            // guards against out-of-order search responses
 
   function enterSearch() {
+    closeKeyboard();                 // wheel-first: land on the box + recent searches
     renderChips();
     if (!el('search-input').value.trim()) showRecent();
-    state.searchFocus = 0;
+    state.searchFocus = 0;           // highlight the search box; the wheel can move to chips
     applySearchFocus();
-    // Entering Search drops straight into the keyboard (the wheel becomes keys).
-    // Hitting Return (kbdGo) runs the search and turns the keyboard back into
-    // the navigation wheel so the wheel then scrolls through the results.
-    openKeyboard();
+    // The keyboard only appears when the user centers the search box (searchCenter),
+    // animating the wheel -> keyboard morph.
   }
 
   function getRecent() {
@@ -672,7 +671,7 @@ const UI = (() => {
     ['.',',','?','!','\'']
   ];
   let _kbdBuilt = false, _kbdNumeric = false;
-  function kbdOpen() { const k = el('keyboard'); return !!k && !k.hidden; }
+  function kbdOpen() { const k = el('keyboard'); return !!k && k.classList.contains('kbd-open'); }
 
   function renderKbdRows() {
     const rows = _kbdNumeric ? KBD_NUM : KBD_ALPHA;
@@ -692,12 +691,14 @@ const UI = (() => {
     const k = el('keyboard');
     if (!k) return;
     k.innerHTML =
-      '<div class="kbd-rows" id="kbd-rows"></div>' +
-      '<div class="kbd-row kbd-bottom">' +
-        '<div class="kbd-key kbd-mode" data-act="mode">123</div>' +
-        '<div class="kbd-key kbd-space" data-act="space">space</div>' +
-        '<div class="kbd-key kbd-go" data-act="go">Search</div>' +
-        '<div class="kbd-key kbd-close" data-act="close" aria-label="Close keyboard">&#10005;</div>' +
+      '<div class="kbd-panel">' +
+        '<div class="kbd-rows" id="kbd-rows"></div>' +
+        '<div class="kbd-row kbd-bottom">' +
+          '<div class="kbd-key kbd-mode" data-act="mode">123</div>' +
+          '<div class="kbd-key kbd-space" data-act="space">space</div>' +
+          '<div class="kbd-key kbd-go" data-act="go">Search</div>' +
+          '<div class="kbd-key kbd-close" data-act="close" aria-label="Close keyboard">&#10005;</div>' +
+        '</div>' +
       '</div>';
     renderKbdRows();
     k.addEventListener('click', onKbdTap);
@@ -733,16 +734,16 @@ const UI = (() => {
   function openKeyboard() {
     buildKeyboard();
     const wheel = el('wheel'), k = el('keyboard');
-    if (wheel) wheel.style.display = 'none';
-    if (k) k.hidden = false;
+    if (wheel) wheel.classList.add('kbd-hidden');   // fade the wheel out
+    if (k) k.classList.add('kbd-open');             // scale + fade the keyboard in (CSS morph)
     state.searchFocus = 0; applySearchFocus();
     // focus shows a caret; inputmode=none keeps the native keyboard away on iOS.
     try { el('search-input').focus({ preventScroll: true }); } catch (e) { try { el('search-input').focus(); } catch (_) {} }
   }
   function closeKeyboard() {
     const wheel = el('wheel'), k = el('keyboard');
-    if (k) k.hidden = true;
-    if (wheel) wheel.style.display = '';
+    if (k) k.classList.remove('kbd-open');          // keyboard scales/fades back out
+    if (wheel) wheel.classList.remove('kbd-hidden');// wheel fades back in
     try { el('search-input').blur(); } catch (e) {}
   }
 

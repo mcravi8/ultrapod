@@ -11,7 +11,7 @@
 html, body { height: 100%; }
 
 body {
-  background: #0a0a0c;
+  background: #b6bac1;          /* silver, so no black ever shows behind the body */
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
@@ -29,7 +29,9 @@ body {
    each holds a fixed design-size element ui.js scales to fill its region. No
    fake status-bar / notch / home-bar chrome. */
 #scaler {
-  position: fixed; inset: 0; overflow: hidden; background: #000;
+  position: fixed; inset: 0; overflow: hidden;
+  /* silver fallback so the very bottom / any uncovered strip is never black */
+  background: linear-gradient(150deg, #c4c8ce, #a8acb3 50%, #b6bac1);
 }
 #app {
   /* full-bleed: fill the EXACT screen (the iPhone clips the rounded corners),
@@ -43,8 +45,8 @@ body {
     inset 0 2px 1px rgba(255,255,255,0.65),
     inset 0 -3px 6px rgba(0,0,0,0.22),
     inset 0 0 0 1px rgba(255,255,255,0.35);
-  padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px
-           calc(env(safe-area-inset-bottom, 0px) + 12px);
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 7px
+           calc(env(safe-area-inset-bottom, 0px) + 4px);
 }
 /* faint brushed-metal sheen across the body */
 #app::before {
@@ -59,11 +61,11 @@ body {
 }
 #screen-region, #wheel-region { position: relative; z-index: 1; }
 #screen-region {
-  flex: 1 1 58%; width: 100%; min-height: 0;
-  display: flex; align-items: center; justify-content: center;
+  flex: 1 1 60%; width: 100%; min-height: 0;
+  display: flex; align-items: center; justify-content: center;   /* bigger screen */
 }
 #wheel-region {
-  flex: 1 1 42%; width: 100%; min-height: 0;
+  flex: 1 1 40%; width: 100%; min-height: 0;
   display: flex; align-items: center; justify-content: center;
 }
 
