@@ -114,11 +114,39 @@ const Player = (() => {
     if (_ready && _player) _player.nextTrack().catch(() => SpotifyAPI.next());
     else SpotifyAPI.next();
   }
-  function togglePlay() {
-    if (_ready && _player) _player.togglePlay().catch(() => fallbackToggle());
-    else fallbackToggle();
+  // Guard so a rapid double-press can't fire two toggles that race (both read
+  // the same state and e.g. pause twice). Released once the press resolves.
+  let _toggling = false;
+  async function togglePlay() {
+    if (_toggling) return;
+    _toggling = true;
+    try {
+      if (_ready && _player) {
+        try { await _player.togglePlay(); }
+        catch (e) { await fallbackToggle(); }     // SDK refused -> Web API
+      } else {
+        await fallbackToggle();
+      }
+    } catch (e) {
+      // Errors surface to the user as toasts inside SpotifyAPI; swallow here so
+      // a failed network call never becomes an unhandled promise rejection.
+    } finally {
+      _toggling = false;
+    }
   }
-  function fallbackToggle() { return _paused ? SpotifyAPI.resume() : SpotifyAPI.pause(); }
+  // On iOS the SDK device is never made active, so player_state_changed never
+  // fires and _paused stays stuck at its initial `true` — which made this button
+  // always resume() and never pause(). Read the active device's real state from
+  // the Web API at press time so it can BOTH pause and resume.
+  async function fallbackToggle() {
+    let playing = !_paused;                       // last-known hint (desktop SDK path)
+    try {
+      const cur = await SpotifyAPI.getCurrentlyPlaying();
+      if (cur) playing = cur.is_playing;
+    } catch (e) {}
+    _paused = playing;                            // reflect the post-toggle state
+    return playing ? SpotifyAPI.pause() : SpotifyAPI.resume();
+  }
 
   return { start, previousTrack, nextTrack, togglePlay };
 })();

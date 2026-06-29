@@ -22,25 +22,46 @@ body {
 
 @keyframes upblink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
 
-/* ---- fluid full-screen layout -------------------------------------
-   Two stacked regions fill the viewport: the display (top) and the click
-   wheel (bottom). Each holds a fixed design-size element that ui.js scales
-   (CSS transform) to fill its region — so the UI fills ANY screen (Safari,
-   standalone PWA, desktop) top-to-bottom, with no fake device frame. */
+/* ---- fluid full-screen layout + iPod body -------------------------
+   #app IS the iPod: a brushed-graphite metal slab filling the viewport (less a
+   thin dark "void" margin so it reads as a real device), with the display and
+   click wheel set into it. The display fills the top, the wheel the bottom;
+   each holds a fixed design-size element ui.js scales to fill its region. No
+   fake status-bar / notch / home-bar chrome. */
 #scaler {
-  position: fixed; inset: 0; overflow: hidden; background: #0a0a0c;
-  display: flex; justify-content: center;
+  position: fixed; inset: 0; overflow: hidden;
+  /* studio vignette so the device sits in space */
+  background: radial-gradient(ellipse 130% 95% at 50% 36%, #161718, #050506 80%);
+  display: flex; align-items: center; justify-content: center;
 }
 #app {
-  width: 100%; max-width: 460px;
-  /* height is forced to window.innerHeight by ui.js (the only value that is
-     correct in an iOS standalone PWA); these are first-paint fallbacks. */
+  width: calc(100% - 18px); max-width: 432px;
+  /* height is set to (window.innerHeight - void) by ui.js — the only value
+     that is correct in an iOS standalone PWA; these are first-paint fallbacks. */
   height: 100vh;
   height: 100dvh;
   display: flex; flex-direction: column; align-items: center;
-  padding: calc(env(safe-area-inset-top, 0px) + 6px) env(safe-area-inset-right, 0px)
-           calc(env(safe-area-inset-bottom, 0px) + 6px) env(safe-area-inset-left, 0px);
+  /* the metal body */
+  background:
+    linear-gradient(150deg, #51545b 0%, #34363d 15%, #25272c 50%, #2b2d33 85%, #54575e 100%);
+  border-radius: 44px;
+  box-shadow:
+    0 36px 72px -22px rgba(0,0,0,0.95),
+    0 12px 28px -10px rgba(0,0,0,0.6),
+    inset 0 2px 1px rgba(255,255,255,0.22),
+    inset 0 -3px 5px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.08);
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px
+           calc(env(safe-area-inset-bottom, 0px) + 16px);
+  overflow: hidden;
 }
+/* faint brushed-metal sheen across the body */
+#app::before {
+  content: ''; position: absolute; inset: 0; border-radius: 44px; pointer-events: none;
+  background: linear-gradient(125deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 22%, rgba(255,255,255,0) 78%, rgba(255,255,255,0.08) 100%);
+  z-index: 0;
+}
+#screen-region, #wheel-region { position: relative; z-index: 1; }
 #screen-region {
   flex: 1 1 58%; width: 100%; min-height: 0;
   display: flex; align-items: center; justify-content: center;
@@ -55,8 +76,14 @@ body {
   position: relative; flex: none;
   width: 360px; height: 412px;
   transform-origin: center center;        /* transform: scale() set by ui.js */
-  border-radius: 30px; overflow: hidden; background: #000;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07), inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 18px rgba(0,0,0,0.5);
+  border-radius: 26px; overflow: hidden; background: #000;
+  /* set into the metal: crisp dark cut-line + a recessed inner bevel */
+  box-shadow:
+    0 0 0 2px rgba(0,0,0,0.55),
+    0 1px 0 rgba(255,255,255,0.10),
+    0 8px 20px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    inset 0 2px 6px rgba(0,0,0,0.6);
 }
 
 /* ---- view container toggling --------------------------------------- */
@@ -150,7 +177,7 @@ body {
 .list-row { display: flex; align-items: center; gap: 13px; padding: 0 12px; height: 58px; cursor: pointer; border-radius: 12px; }
 .list-row.sel { background: rgba(255,255,255,0.08); }
 .list-art { width: 38px; height: 38px; border-radius: 7px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
-.list-name { flex: 1; font-size: 13px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-name { flex: 1; min-width: 0; font-size: 13px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list-chev { display: flex; color: #5f5f66; }
 
 .list.artists .list-row { height: 54px; }
@@ -159,8 +186,11 @@ body {
 /* ============================================================
    ALBUMS GRID
    ============================================================ */
-.album-grid { position: absolute; inset: 0; z-index: 10; padding: 18px 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px 12px; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.album-cell { cursor: pointer; }
+/* minmax(0,1fr) + min-width:0 keep all three columns equal: a bare 1fr track
+   has a min-content floor, so a long nowrap title (e.g. "WE DON'T TRUST YOU")
+   would otherwise blow its column wide and push the rest off-screen. */
+.album-grid { position: absolute; inset: 0; z-index: 10; padding: 18px 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 12px; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.album-cell { cursor: pointer; min-width: 0; }
 .album-art { width: 100%; aspect-ratio: 1; border-radius: 7px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
 .album-cell.sel .album-art { box-shadow: inset 0 0 0 2px #1ed760, 0 0 0 3px rgba(30,215,96,0.35); }
 .album-name { margin-top: 6px; font-size: 10.5px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -182,7 +212,7 @@ body {
 .result-row.sel { background: rgba(255,255,255,0.08); }
 .result-art { width: 34px; height: 34px; border-radius: 6px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
 .result-art.artist { border-radius: 50%; }
-.result-name { flex: 1; font-size: 12px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-name { flex: 1; min-width: 0; font-size: 12px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .result-sub { font-size: 10px; color: #8b8b92; flex: none; }
 
 /* ============================================================
@@ -214,7 +244,12 @@ body {
   width: 236px; height: 236px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   background: radial-gradient(circle at 50% 30%, #242428, #18181b 56%, #0c0c0e);
-  box-shadow: inset 0 2px 4px rgba(255,255,255,0.07), inset 0 -12px 26px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.05), 0 10px 26px -6px rgba(0,0,0,0.5);
+  /* recessed seat in the metal: dark cut-ring + light catch on the upper rim */
+  box-shadow:
+    inset 0 2px 4px rgba(255,255,255,0.07), inset 0 -12px 26px rgba(0,0,0,0.6),
+    inset 0 0 0 1px rgba(255,255,255,0.05),
+    0 0 0 2px rgba(0,0,0,0.45), 0 1px 0 3px rgba(255,255,255,0.06),
+    0 12px 28px -6px rgba(0,0,0,0.6);
   touch-action: none;
 }
 .wheel-menu { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: rgba(255,255,255,0.62); }
@@ -235,6 +270,45 @@ body {
 /* snappy highlight transitions so scrolling feels immediate */
 .list-row, .result-row, .track-row { transition: background-color 0.08s ease; }
 .album-art { transition: box-shadow 0.1s ease; }
+
+/* ============================================================
+   ON-SCREEN KEYBOARD (replaces the wheel while typing a search)
+   Same graphite/inset aesthetic as the click wheel; fills #wheel-region.
+   ============================================================ */
+#keyboard { width: 100%; max-width: 360px; padding: 0 4px; flex-direction: column; gap: 7px; }
+#keyboard[hidden] { display: none; }
+#keyboard:not([hidden]) { display: flex; }
+.kbd-rows { display: flex; flex-direction: column; gap: 6px; }
+.kbd-row { display: flex; gap: 5px; justify-content: center; }
+.kbd-key {
+  flex: 1 1 0; min-width: 0; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px; cursor: pointer; user-select: none;
+  font-size: 15px; color: #e8e8ec;
+  background: radial-gradient(circle at 50% 28%, #2a2a2e, #1a1a1d 60%, #0e0e10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 5px rgba(0,0,0,0.45);
+  transition: box-shadow 0.05s ease;
+}
+.kbd-key:active {
+  background: radial-gradient(circle at 50% 28%, #1d1d20, #121214 60%);
+  box-shadow: inset 0 4px 8px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(0,0,0,0.5);
+  transform: translateY(1px); color: #fff;
+}
+.kbd-row.kbd-bottom { margin-top: 1px; }
+.kbd-mode, .kbd-close { flex: 1.5 1 0; font-size: 12px; color: #a9a9b0; letter-spacing: 0.5px; }
+.kbd-del   { flex: 1.5 1 0; font-size: 16px; color: #c9c9cf; }
+.kbd-space { flex: 4 1 0; font-size: 12px; letter-spacing: 1px; color: #a9a9b0; }
+.kbd-go {
+  flex: 2.4 1 0; font-size: 13px; font-weight: 700; color: #04130a;
+  background: linear-gradient(118deg,#1ed760,#1db954);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 12px rgba(29,185,84,0.4);
+}
+.kbd-go:active { background: linear-gradient(118deg,#19c055,#179c48); transform: translateY(1px); }
+
+/* search selection highlights for wheel navigation (box + recent chips) */
+.search-box.sel { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), 0 0 0 2px rgba(30,215,96,0.65); }
+.chip { transition: box-shadow 0.08s ease; }
+.chip.sel { color: #fff; box-shadow: inset 0 0 0 1px rgba(30,215,96,0.8), 0 0 0 2px rgba(30,215,96,0.4); }
 
 /* ---- sign-in overlay (user-gesture login) -------------------------- */
 #signin {

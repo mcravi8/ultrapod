@@ -725,8 +725,9 @@ const UI = (() => {
   function fitStage() {
     const app = el('app');
     // window.innerHeight is the only height that is correct in an iOS
-    // standalone PWA (height:100%/100vh under-report there). Force it.
-    if (app) app.style.height = window.innerHeight + 'px';
+    // standalone PWA (height:100%/100vh under-report there). Force it, minus a
+    // small void so the metal iPod body reads as a device in space.
+    if (app) app.style.height = (window.innerHeight - 16) + 'px';
     const screen = el('screen'), wheel = el('wheel');
     const sr = el('screen-region'), wr = el('wheel-region');
     if (sr && screen) {

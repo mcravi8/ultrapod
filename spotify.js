@@ -294,22 +294,26 @@ const SpotifyAPI = (() => {
   // (notably iOS Safari, where the SDK does not stream). When _deviceId is
   // null these act on the user's currently-active device.
   function ok(res) { return res.ok || res.status === 204; }
-  async function resume() {
-    const res = await api('/me/player/play' + (_deviceId ? '?device_id=' + _deviceId : ''), { method: 'PUT' });
-    return ok(res);
+  // On failure, surface the same actionable toasts as play() so the wheel's
+  // play/pause/next/prev buttons never fail silently (notably on iOS with no
+  // active device, where these 404).
+  function transportFail(status) {
+    if (window.UI && UI.toast) {
+      if (status === 403) UI.toast('Premium required for playback');
+      else if (status === 404) UI.toast('Open Spotify on a device, then try again');
+      else UI.toast('Playback unavailable');
+    }
+    return false;
   }
-  async function pause() {
-    const res = await api('/me/player/pause' + (_deviceId ? '?device_id=' + _deviceId : ''), { method: 'PUT' });
-    return ok(res);
+  // PUT/POST a transport command; toast + return false on any non-OK status.
+  async function transport(path, method) {
+    const res = await api(path + (_deviceId ? '?device_id=' + _deviceId : ''), { method });
+    return ok(res) ? true : transportFail(res.status);
   }
-  async function next() {
-    const res = await api('/me/player/next' + (_deviceId ? '?device_id=' + _deviceId : ''), { method: 'POST' });
-    return ok(res);
-  }
-  async function previous() {
-    const res = await api('/me/player/previous' + (_deviceId ? '?device_id=' + _deviceId : ''), { method: 'POST' });
-    return ok(res);
-  }
+  function resume()   { return transport('/me/player/play',     'PUT'); }
+  function pause()    { return transport('/me/player/pause',    'PUT'); }
+  function next()     { return transport('/me/player/next',     'POST'); }
+  function previous() { return transport('/me/player/previous', 'POST'); }
 
   return {
     setDeviceId,

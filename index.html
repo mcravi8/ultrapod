@@ -11,11 +11,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="UltraPod">
   <meta name="theme-color" content="#0a0a0c">
-  <link rel="manifest" href="manifest.json?v=9">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=9">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=9">
+  <link rel="manifest" href="manifest.json?v=10">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=10">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=10">
 
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <div id="scaler">
@@ -123,9 +123,12 @@
         <!-- ===== SEARCH ===== -->
         <div class="view" id="view-search">
           <div class="search-view">
-            <div class="search-box">
+            <div class="search-box" id="search-box">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e94" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"></circle><line x1="20" y1="20" x2="15.6" y2="15.6"></line></svg>
-              <input class="search-input" id="search-input" type="text" placeholder="Search music" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+              <!-- inputmode=none: the in-app click-wheel keyboard supplies text, so
+                   iOS must NOT raise the native keyboard. Desktop physical typing
+                   still works (inputmode only governs the on-screen keyboard). -->
+              <input class="search-input" id="search-input" type="text" inputmode="none" placeholder="Search music" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div id="search-recent">
               <div class="search-recent-label">RECENT</div>
@@ -158,17 +161,20 @@
         <div class="wheel-play"   id="btn-play">&#9655; &#9614;&#9614;</div>
         <div class="wheel-center" id="btn-center"></div>
       </div>
+      <!-- in-app keyboard: swapped in for the wheel while typing a search
+           (built + toggled by ui.js). -->
+      <div class="kbd" id="keyboard" hidden></div>
     </div>
 
   </div><!-- /#app -->
 </div><!-- /#scaler -->
 
   <!-- App modules (load order: config -> auth -> spotify -> player -> ui) -->
-  <script src="config.js?v=9"></script>
-  <script src="auth.js?v=9"></script>
-  <script src="spotify.js?v=9"></script>
-  <script src="player.js?v=9"></script>
-  <script src="ui.js?v=9"></script>
+  <script src="config.js?v=10"></script>
+  <script src="auth.js?v=10"></script>
+  <script src="spotify.js?v=10"></script>
+  <script src="player.js?v=10"></script>
+  <script src="ui.js?v=10"></script>
   <!-- Spotify Web Playback SDK (loaded after player.js defines the ready callback) -->
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </body>
