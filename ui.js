@@ -1087,13 +1087,20 @@ const UI = (() => {
   const VOL_STEP = 4;           // volume % per step
   let volMode = false, volLevel = 50, volAccum = 0;
   let holdTimer = null, holdMoved = 0, volApplyTimer = null, volFailNoticed = false;
+  let wheelDown = false;        // pointer currently held on the wheel
 
   function showVolHud()   { const h = el('vol-hud'); if (h) h.classList.add('show'); updateVolHud(); }
   function hideVolHud()   { const h = el('vol-hud'); if (h) h.classList.remove('show'); }
   function updateVolHud() { const f = el('vol-fill'); if (f) f.style.width = clamp(volLevel, 0, 100) + '%'; }
   function applyVol() {
-    Player.setVolume(volLevel).then(okk => {
-      if (okk === false && !volFailNoticed) { volFailNoticed = true; toast('Volume is locked on this device'); }
+    Player.setVolume(volLevel).then(reason => {
+      if (reason === 'ok' || volFailNoticed) return;
+      volFailNoticed = true;
+      toast(reason === 'no-device'   ? 'No active device — open Menu ▸ Devices'
+          : reason === 'premium'     ? 'Volume needs Spotify Premium'
+          : reason === 'unsupported' ? 'This device sets its own volume'
+          : 'Couldn’t change the volume');
+      volMode = false; hideVolHud();        // circling won't help — close volume mode
     }).catch(() => {});
   }
   function scheduleVolApply() {
@@ -1108,11 +1115,20 @@ const UI = (() => {
   }
   function enterVolumeMode() {
     holdTimer = null;
-    volMode = true; volAccum = 0; volFailNoticed = false;
-    wheelMoved = true;                    // swallow the click that follows pointerup
-    Feedback.haptic(18);
-    showVolHud();
-    Player.getVolume().then(v => { if (typeof v === 'number') { volLevel = v; updateVolHud(); } }).catch(() => {});
+    if (!wheelDown) return;               // finger already lifted
+    // Only engage if the ACTIVE device can actually be volume-controlled, so we
+    // don't trap the user in a gesture that can never apply (e.g. the phone's
+    // own Spotify, whose volume is hardware-only, or nothing playing at all).
+    Player.getVolumeTarget().then(t => {
+      if (!wheelDown) return;             // released while we were checking
+      if (!t || !t.hasDevice) { toast('No active device — open Menu ▸ Devices'); return; }
+      if (!t.supported)        { toast((t.name || 'This device') + ' sets its own volume'); return; }
+      volMode = true; volAccum = 0; volFailNoticed = false;
+      wheelMoved = true;                  // swallow the click that follows pointerup
+      Feedback.haptic(18);
+      if (typeof t.volume === 'number') volLevel = t.volume;
+      showVolHud();
+    }).catch(() => { toast('Volume unavailable'); });
   }
   function exitVolumeMode() {
     volMode = false;
@@ -1137,7 +1153,7 @@ const UI = (() => {
 
     wheel.addEventListener('pointerdown', (e) => {
       Feedback.resume();                   // unlock audio within the gesture
-      drag.active = true; drag.acc = 0; wheelMoved = false;
+      drag.active = true; drag.acc = 0; wheelMoved = false; wheelDown = true;
       drag.last = angleAt(e);
       holdMoved = 0;
       if (holdTimer) clearTimeout(holdTimer);
@@ -1177,7 +1193,7 @@ const UI = (() => {
       if (wheelMoved) e.preventDefault();
     });
     const end = () => {
-      drag.active = false;
+      drag.active = false; wheelDown = false;
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
       if (volMode) exitVolumeMode();
     };

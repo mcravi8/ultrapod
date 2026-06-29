@@ -150,21 +150,30 @@ const Player = (() => {
   // ---- volume (click-wheel press-and-circle) -------------------------
   // Desktop: the in-browser SDK player. iOS/remote: the active Connect device
   // via the Web API. percent is 0..100.
+  // Returns a reason string: 'ok' | 'no-device' | 'unsupported' | 'premium' | 'error'.
   function setVolume(percent) {
     const v = Math.max(0, Math.min(100, percent));
     if (_ready && _player) {
-      try { return Promise.resolve(_player.setVolume(v / 100)).then(() => true).catch(() => false); }
-      catch (e) { return Promise.resolve(false); }
+      try { return Promise.resolve(_player.setVolume(v / 100)).then(() => 'ok').catch(() => 'error'); }
+      catch (e) { return Promise.resolve('error'); }
     }
     return SpotifyAPI.setVolume(v);
   }
-  function getVolume() {
+  // Capability probe for the volume gesture:
+  // { volume: 0..100|null, supported: bool, hasDevice: bool, name }.
+  function getVolumeTarget() {
     if (_ready && _player) {
-      try { return Promise.resolve(_player.getVolume()).then(x => Math.round(x * 100)).catch(() => null); }
-      catch (e) { return Promise.resolve(null); }
+      try {
+        return Promise.resolve(_player.getVolume())
+          .then(x => ({ volume: Math.round(x * 100), supported: true, hasDevice: true, name: 'iPod' }))
+          .catch(() => ({ volume: null, supported: true, hasDevice: true, name: 'iPod' }));
+      } catch (e) { return Promise.resolve({ volume: null, supported: true, hasDevice: true, name: 'iPod' }); }
     }
-    return SpotifyAPI.getVolume();
+    return SpotifyAPI.getActiveDevice().then(d => {
+      if (!d) return { volume: null, supported: false, hasDevice: false, name: '' };
+      return { volume: d.volume_percent, supported: d.supports_volume && !d.is_restricted, hasDevice: true, name: d.name };
+    }).catch(() => ({ volume: null, supported: false, hasDevice: false, name: '' }));
   }
 
-  return { start, previousTrack, nextTrack, togglePlay, setVolume, getVolume };
+  return { start, previousTrack, nextTrack, togglePlay, setVolume, getVolumeTarget };
 })();

@@ -391,18 +391,34 @@ const SpotifyAPI = (() => {
   function previous() { return transport('/me/player/previous', 'POST'); }
 
   // ---- volume --------------------------------------------------------
-  // PUT /me/player/volume?volume_percent=N  (0..100) on the resolved device.
-  async function setVolume(percent, deviceId) {
-    const dev = deviceId || await resolveDeviceId();
-    const v = Math.max(0, Math.min(100, Math.round(percent)));
-    const res = await api('/me/player/volume?volume_percent=' + v + (dev ? '&device_id=' + dev : ''), { method: 'PUT' });
-    return ok(res);
-  }
-  // Current volume of the active device (0..100), or null if unknown.
-  async function getVolume() {
+  // The ACTIVE device object (the only one the volume endpoint accepts), with
+  // its volume capability, or null when nothing is active. supports_volume is
+  // false for e.g. the Spotify phone app (hardware-only volume) and many casts.
+  async function getActiveDevice() {
     const data = await getJSON('/me/player');
-    if (data && data.device && typeof data.device.volume_percent === 'number') return data.device.volume_percent;
-    return null;
+    if (!data || !data.device) return null;
+    const d = data.device;
+    return {
+      id: d.id, name: d.name, type: d.type,
+      volume_percent: (typeof d.volume_percent === 'number' ? d.volume_percent : null),
+      supports_volume: d.supports_volume !== false,
+      is_restricted: !!d.is_restricted
+    };
+  }
+  // PUT /me/player/volume on the active device. Returns a REASON (not a bool):
+  // 'ok' | 'no-device' (404) | 'premium' (403 PREMIUM_REQUIRED) |
+  // 'unsupported' (403 other — e.g. a phone whose volume is hardware-only) | 'error'.
+  async function setVolume(percent, deviceId) {
+    const v = Math.max(0, Math.min(100, Math.round(percent)));
+    const res = await api('/me/player/volume?volume_percent=' + v + (deviceId ? '&device_id=' + deviceId : ''), { method: 'PUT' });
+    if (res.ok || res.status === 204) return 'ok';
+    if (res.status === 404) return 'no-device';
+    if (res.status === 403) {
+      let reason = '';
+      try { const j = await res.json(); reason = (j && j.error && j.error.reason) || ''; } catch (e) {}
+      return reason === 'PREMIUM_REQUIRED' ? 'premium' : 'unsupported';
+    }
+    return 'error';
   }
 
   return {
@@ -412,6 +428,6 @@ const SpotifyAPI = (() => {
     getCurrentlyPlaying, search,
     playContext, playTracks, transferPlayback,
     resume, pause, next, previous,
-    setVolume, getVolume
+    setVolume, getActiveDevice
   };
 })();
