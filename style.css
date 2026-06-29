@@ -48,10 +48,11 @@ body {
   padding: calc(env(safe-area-inset-top, 0px) + 8px) 18px
            calc(env(safe-area-inset-bottom, 0px) + 4px);
 }
-/* faint brushed-metal sheen across the body */
+/* faint brushed-metal sheen — top-left only, so the bottom edge stays a uniform
+   #c6c9cf (no glint in the bottom-right corner that would show vs the home-bar) */
 #app::before {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: linear-gradient(125deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0) 20%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.22) 100%);
+  background: linear-gradient(125deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0) 100%);
 }
 /* dark scrim behind the status bar so its white text stays legible on silver */
 #app::after {
