@@ -242,22 +242,22 @@ body {
   position: relative; flex: none; transform-origin: center center;
   width: 236px; height: 236px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  /* brushed-silver disc, a touch brighter/cooler than the body so it reads as a
-     control rather than blending into the metal slab */
-  background: radial-gradient(circle at 50% 30%, #f3f4f6 0%, #d6d9de 54%, #bcbfc6 100%);
-  /* recessed seat in the metal: dark cut-ring + bright catch on the upper rim */
+  /* satin anodised-aluminium disc: matte, tone-on-tone with the body, seated
+     into the metal by a fine machined groove (iPod Classic). Not glossy. */
+  background: radial-gradient(circle at 50% 44%, #dde0e5 0%, #d0d3d9 58%, #bfc2c9 100%);
   box-shadow:
-    inset 0 2px 3px rgba(255,255,255,0.75), inset 0 -12px 24px rgba(0,0,0,0.16),
-    inset 0 0 0 1px rgba(255,255,255,0.55),
-    0 0 0 2px rgba(0,0,0,0.32), 0 1px 0 3px rgba(255,255,255,0.5),
-    0 12px 28px -6px rgba(0,0,0,0.45);
+    0 0 0 1px rgba(255,255,255,0.55),         /* bright machined lip */
+    0 0 0 2px rgba(0,0,0,0.13),               /* recessed groove into the body */
+    0 9px 22px -9px rgba(0,0,0,0.28),         /* soft seat shadow */
+    inset 0 1px 1px rgba(255,255,255,0.5),    /* gentle matte top catch */
+    inset 0 -8px 18px rgba(0,0,0,0.05);       /* whisper of bottom shade */
   touch-action: none;
 }
 .wheel-menu { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: rgba(58,61,68,0.78); }
 .wheel-next { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(58,61,68,0.66); }
 .wheel-prev { position: absolute; top: 50%; left: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(58,61,68,0.66); }
 .wheel-play { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 12px; letter-spacing: 1px; color: rgba(58,61,68,0.66); }
-.wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 38%, #fbfbfc 0%, #e3e5e9 58%, #c8cbd1 100%); box-shadow: inset 0 1px 2px rgba(255,255,255,0.9), inset 0 -3px 6px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.6), 0 0 0 1px rgba(0,0,0,0.16), 0 2px 5px rgba(0,0,0,0.22); }
+.wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 44%, #e2e4e8 0%, #d2d5db 60%, #c1c4cb 100%); box-shadow: 0 0 0 1px rgba(0,0,0,0.09), 0 0 0 2px rgba(255,255,255,0.4), inset 0 1px 2px rgba(255,255,255,0.55), inset 0 -2px 5px rgba(0,0,0,0.05); }
 
 /* ---- click-wheel tactile feedback + selection "tick" pulse --------- */
 .wheel-menu:active, .wheel-prev:active, .wheel-next:active, .wheel-play:active { color: rgba(18,20,26,0.92); }
