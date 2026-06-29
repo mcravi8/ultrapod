@@ -150,15 +150,16 @@ const UI = (() => {
     function ensureHaptic() {
       if (hapticLabel !== null) return hapticLabel;
       try {
+        // Canonical iOS web-haptics form (ios-haptics): a display:none switch
+        // in <head>, toggled via its label, fires the Taptic Engine on 17.4+.
         const label = document.createElement('label');
         label.setAttribute('aria-hidden', 'true');
-        label.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;pointer-events:none;';
+        label.style.display = 'none';
         const input = document.createElement('input');
         input.type = 'checkbox';
-        input.setAttribute('switch', '');     // iOS 17.4+ switch -> Taptic on toggle
-        input.tabIndex = -1;
+        input.setAttribute('switch', '');
         label.appendChild(input);
-        (document.body || document.documentElement).appendChild(label);
+        (document.head || document.documentElement).appendChild(label);
         hapticLabel = label;
       } catch (e) { hapticLabel = false; }
       return hapticLabel;

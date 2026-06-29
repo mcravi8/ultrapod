@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>UltraPod — Haptic Test</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      background: #0a0a0c; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent; padding: 30px; box-sizing: border-box; }
+    button { padding: 24px 44px; font-size: 19px; font-weight: 700; border: none;
+      border-radius: 32px; color: #04130a; font-family: inherit;
+      background: linear-gradient(118deg, #1ed760, #1db954);
+      box-shadow: 0 10px 26px rgba(29,185,84,0.4); }
+    button:active { transform: translateY(1px); }
+    .info { font-size: 12.5px; color: #8b8b92; text-align: center; line-height: 1.55; max-width: 320px; }
+    #log { font-size: 13px; color: #1ed760; min-height: 18px; }
+    code { color: #c9c9cf; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="info">Web Haptic Test</div>
+  <button id="b">TAP ME</button>
+  <div id="log">tap the button…</div>
+  <div class="info">If you feel a physical tap, web haptics work on your device.
+    If you feel nothing, your iOS is likely &lt; 17.4, or Settings → Sounds &amp; Haptics →
+    System Haptics is off, or your device is in a Focus/Low-Power state.</div>
+  <div class="info"><code id="ua"></code></div>
+<script>
+  document.getElementById('ua').textContent = navigator.userAgent;
+  var label;
+  function haptic() {
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+    if (!label) {
+      label = document.createElement('label');
+      label.style.display = 'none';
+      var i = document.createElement('input');
+      i.type = 'checkbox';
+      i.setAttribute('switch', '');
+      label.appendChild(i);
+      document.head.appendChild(label);
+    }
+    try { label.click(); } catch (e) {}
+  }
+  var n = 0;
+  document.getElementById('b').addEventListener('click', function () {
+    haptic();
+    n++;
+    document.getElementById('log').textContent = 'tapped ' + n + '× — haptic fired';
+  });
+</script>
+</body>
+</html>
