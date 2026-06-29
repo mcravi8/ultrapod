@@ -1078,7 +1078,19 @@ const UI = (() => {
   // ===================================================================
   //  Sign-in overlay (user-gesture login — reliable in iOS standalone PWAs)
   // ===================================================================
+  // The iOS home-indicator strip (and status-bar area) shows the page/theme
+  // background, which the web content can't paint over in a standalone PWA. So
+  // we keep that background in sync with whatever screen is up: dark behind the
+  // dark sign-in, silver behind the silver iPod — so the strip never contrasts.
+  function setShellBg(color) {
+    document.documentElement.style.backgroundColor = color;
+    document.body.style.backgroundColor = color;
+    const m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', color);
+  }
+
   function showSignIn(note) {
+    setShellBg('#0a0a0c');
     let o = document.getElementById('signin');
     if (!o) {
       o = document.createElement('div');
@@ -1101,6 +1113,7 @@ const UI = (() => {
     o.style.display = 'flex';
   }
   function hideSignIn() {
+    setShellBg('#c6c9cf');     // back to the silver body tone for the home-bar strip
     const o = document.getElementById('signin');
     if (o) o.style.display = 'none';
   }

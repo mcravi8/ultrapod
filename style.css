@@ -39,13 +39,12 @@ body {
      so the metal body reaches every edge — no black margins. */
   position: absolute; inset: 0; overflow: hidden;
   display: flex; flex-direction: column; align-items: center;
-  /* brushed silver / aluminium body */
+  /* brushed silver / aluminium body. Base gradient is vertical so its BOTTOM
+     edge is uniformly #c6c9cf (= the iOS home-bar strip colour) with NO bottom
+     edge-line; the brushed-metal richness comes from the diagonal ::before. */
   background:
-    linear-gradient(150deg, #e8eaee 0%, #c7cad0 15%, #adb1b8 50%, #b9bcc3 83%, #c6c9cf 100%);
-  box-shadow:
-    inset 0 2px 1px rgba(255,255,255,0.65),
-    inset 0 -3px 6px rgba(0,0,0,0.22),
-    inset 0 0 0 1px rgba(255,255,255,0.35);
+    linear-gradient(180deg, #e6e8ec 0%, #cdd0d6 55%, #c6c9cf 100%);
+  box-shadow: inset 0 2px 1px rgba(255,255,255,0.55);
   padding: calc(env(safe-area-inset-top, 0px) + 8px) 18px
            calc(env(safe-area-inset-bottom, 0px) + 4px);
 }
@@ -242,27 +241,25 @@ body {
   position: relative; flex: none; transform-origin: center center;
   width: 236px; height: 236px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  /* graphite click wheel: a dark disc with its OWN gradient (isolated from the
-     body), seated into the silver aluminium by a bright machined lip */
-  background: radial-gradient(circle at 50% 32%, #34343a 0%, #222227 56%, #151518 100%);
+  /* original graphite click wheel */
+  background: radial-gradient(circle at 50% 30%, #242428, #18181b 56%, #0c0c0e);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.5),          /* bright machined lip on the silver body */
-    0 0 0 2px rgba(0,0,0,0.22),               /* recessed groove */
-    0 10px 24px -8px rgba(0,0,0,0.42),        /* soft seat shadow */
-    inset 0 2px 3px rgba(255,255,255,0.08),   /* subtle top catch on the dark disc */
-    inset 0 -12px 26px rgba(0,0,0,0.5);       /* depth */
+    inset 0 2px 4px rgba(255,255,255,0.07), inset 0 -12px 26px rgba(0,0,0,0.6),
+    inset 0 0 0 1px rgba(255,255,255,0.05),
+    0 0 0 2px rgba(0,0,0,0.45), 0 1px 0 3px rgba(255,255,255,0.06),
+    0 12px 28px -6px rgba(0,0,0,0.6);
   touch-action: none;
 }
 .wheel-menu { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: rgba(255,255,255,0.62); }
 .wheel-next { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
 .wheel-prev { position: absolute; top: 50%; left: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
 .wheel-play { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,0.55); }
-.wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 64%, #2c2c31 0%, #1a1a1e 58%, #0d0d10 100%); box-shadow: inset 0 7px 12px rgba(0,0,0,0.72), inset 0 -3px 6px rgba(255,255,255,0.06), inset 0 0 0 1px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.4); }
+.wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 66%, #2b2b2f 0%, #161619 58%, #0b0b0d 100%); box-shadow: inset 0 7px 12px rgba(0,0,0,0.78), inset 0 -4px 6px rgba(255,255,255,0.07), inset 0 0 0 1px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06); }
 
 /* ---- click-wheel tactile feedback + selection "tick" pulse --------- */
 .wheel-menu:active, .wheel-prev:active, .wheel-next:active, .wheel-play:active { color: rgba(255,255,255,0.95); }
 .wheel-center:active {
-  box-shadow: inset 0 9px 15px rgba(0,0,0,0.82), inset 0 -3px 5px rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.3);
+  box-shadow: inset 0 10px 17px rgba(0,0,0,0.85), inset 0 -3px 5px rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05);
   transform: translateY(0.5px);
 }
 /* brief scale-pop fired on the highlighted item each time the wheel ticks */
