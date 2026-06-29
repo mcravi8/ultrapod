@@ -126,8 +126,35 @@ const UI = (() => {
       return ctx;
     }
 
+    // iOS keeps a fresh AudioContext "suspended" until a sound actually plays
+    // inside a user gesture. resume() alone is async, so the very first tick/
+    // press — scheduled synchronously right after — was silent until something
+    // ELSE woke the audio session (e.g. Spotify audio starting). That's the
+    // "no click until music plays" bug. Fix: on the first touch, resume AND
+    // play a 1-frame silent buffer to force the context to 'running' now. Re-run
+    // it each gesture (cheap, guarded) so it also recovers if iOS re-suspends
+    // the context after the app is backgrounded.
+    function unlock() {
+      const c = resume();
+      if (!c) return;
+      // Replay the 1-frame silent buffer whenever the context isn't 'running'
+      // (first gesture, or after iOS re-suspends it when the PWA is
+      // backgrounded) to force it back to running synchronously. Guarding on
+      // state (not a one-shot latch) is what makes recovery actually work.
+      if (c.state !== 'running') {
+        try {
+          const buf = c.createBuffer(1, 1, 22050);
+          const src = c.createBufferSource();
+          src.buffer = buf;
+          src.connect(c.destination);
+          src.start(0);
+        } catch (e) {}
+      }
+    }
+
     function blip(freq, peak, dur, type) {
       const c = ctx; if (!c) return;
+      if (c.state !== 'running') { try { c.resume(); } catch (e) {} }
       const t = c.currentTime;
       const osc = c.createOscillator();
       const gain = c.createGain();
@@ -183,7 +210,13 @@ const UI = (() => {
       haptic(12);
     }
 
-    return { resume, tick, press, haptic };
+    // Prime/unlock audio on the very first interaction anywhere — capture phase
+    // so it runs before the wheel/button click handlers fire their first blip.
+    const prime = () => unlock();
+    document.addEventListener('pointerdown', prime, { capture: true });
+    document.addEventListener('touchstart', prime, { capture: true, passive: true });
+
+    return { resume, unlock, tick, press, haptic };
   })();
 
   // brief scale "pop" on a node to make the highlight feel tactile.
@@ -221,7 +254,12 @@ const UI = (() => {
     }
   }
 
-  function goMenu() { go('menu'); }
+  // MENU steps back to the sidebar from any sub-view. If we're ALREADY on the
+  // sidebar, a second MENU press jumps to Now Playing (iPod-style shortcut).
+  function goMenu() {
+    if (state.view === 'menu') go('nowplaying');
+    else go('menu');
+  }
 
   // menu item activation
   function setMi(i) {

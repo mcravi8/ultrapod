@@ -13,7 +13,42 @@ const SpotifyAPI = (() => {
 
   // Set by player.js once the Web Playback SDK reports a device id.
   let _deviceId = null;
-  function setDeviceId(id) { _deviceId = id; }
+
+  // When the in-browser SDK isn't the active device (iOS Safari can't stream),
+  // we target a real Spotify Connect device instead — including the user's phone
+  // app when it's merely paused/idle (it still appears in /me/player/devices).
+  // Cached briefly; re-resolved on demand or after a stale-device 404.
+  let _fallbackId = null;
+  let _fallbackAt = 0;
+  function setDeviceId(id) { _deviceId = id; _fallbackId = null; _fallbackAt = 0; }
+
+  // GET /v1/me/player/devices -> the user's available Connect devices.
+  async function getDevices() {
+    const data = await getJSON('/me/player/devices');
+    return (data && data.devices) || [];
+  }
+
+  // Pick a device to target. Desktop: the in-browser SDK device. Otherwise the
+  // best available Connect device — preferring the active one, then any
+  // controllable (non-restricted) one (e.g. a paused phone), then anything.
+  // Returns null only when the user has NO available device at all.
+  async function resolveDeviceId(force) {
+    if (_deviceId) return _deviceId;
+    const now = Date.now();
+    if (!force && _fallbackId && (now - _fallbackAt) < 30000) return _fallbackId;
+    let devices = [];
+    try { devices = await getDevices(); } catch (e) {}
+    _fallbackAt = now;
+    if (!devices.length) { _fallbackId = null; return null; }
+    // Prefer the already-active device (even if it reports is_restricted — we
+    // must not steal playback off whatever the user is currently hearing), then
+    // any controllable (non-restricted) device, e.g. a paused phone, then any.
+    const active = devices.find(d => d.is_active);
+    const free   = devices.find(d => !d.is_restricted);
+    const chosen = active || free || devices[0];
+    _fallbackId = (chosen && chosen.id) || null;
+    return _fallbackId;
+  }
 
   // ---- core fetch with auth + 401 retry ------------------------------
   async function api(path, { method = 'GET', body, retry = true } = {}) {
@@ -237,18 +272,26 @@ const SpotifyAPI = (() => {
   //  Playback control
   // ===================================================================
 
-  // Internal: a PUT to /me/player/play with retry-on-no-device logic.
-  async function play(payload, allowRetry = true) {
-    const qs = _deviceId ? ('?device_id=' + _deviceId) : '';
+  // Internal: a PUT to /me/player/play, targeting a resolved device so playback
+  // starts even when nothing is currently active (paused phone, idle speaker).
+  async function play(payload, deviceOverride) {
+    const dev = deviceOverride || await resolveDeviceId();
+    const qs = dev ? ('?device_id=' + dev) : '';
     const res = await api('/me/player/play' + qs, { method: 'PUT', body: payload });
 
     if (res.ok || res.status === 204) return true;
 
-    // No active device -> make our SDK device active and retry once.
-    if (res.status === 404 && allowRetry && _deviceId) {
-      await transferPlayback(_deviceId, false);
-      await new Promise(r => setTimeout(r, 600));   // give Spotify a beat
-      return play(payload, false);
+    // 404 = the target went away (or there was none). Find a fresh device and
+    // retry once with that EXACT target. Passing device_id to /play also
+    // transfers playback to it, so a paused/idle device starts playing without
+    // the user opening Spotify first. (deviceOverride caps this at one retry.)
+    if (res.status === 404 && !deviceOverride) {
+      const target = _deviceId || await resolveDeviceId(true);
+      if (target) {
+        await transferPlayback(target, false);
+        await new Promise(r => setTimeout(r, 600));   // give Spotify a beat
+        return play(payload, target);
+      }
     }
 
     // 403 is the real non-premium / restriction signal.
@@ -256,8 +299,8 @@ const SpotifyAPI = (() => {
       if (window.UI && UI.toast) UI.toast('Premium required for playback');
       return false;
     }
-    // 404 here means no active device (the SDK-device retry above didn't apply,
-    // e.g. iOS Safari where the SDK can't stream). Don't blame Premium.
+    // 404 with no resolvable device: the user genuinely has nowhere to play
+    // (Spotify not open anywhere). Don't blame Premium.
     if (res.status === 404) {
       if (window.UI && UI.toast) UI.toast('Open Spotify on a device, then try again');
       return false;
@@ -305,10 +348,22 @@ const SpotifyAPI = (() => {
     }
     return false;
   }
-  // PUT/POST a transport command; toast + return false on any non-OK status.
+  // PUT/POST a transport command against a resolved device; toast + return false
+  // on any non-OK status. On a stale-device 404 (the cached target closed),
+  // re-scan once and retry on a fresh device before giving up.
   async function transport(path, method) {
-    const res = await api(path + (_deviceId ? '?device_id=' + _deviceId : ''), { method });
-    return ok(res) ? true : transportFail(res.status);
+    const dev = await resolveDeviceId();
+    const res = await api(path + (dev ? '?device_id=' + dev : ''), { method });
+    if (ok(res)) return true;
+    if (res.status === 404 && !_deviceId) {
+      const dev2 = await resolveDeviceId(true);
+      if (dev2 && dev2 !== dev) {
+        const res2 = await api(path + '?device_id=' + dev2, { method });
+        if (ok(res2)) return true;
+        return transportFail(res2.status);
+      }
+    }
+    return transportFail(res.status);
   }
   function resume()   { return transport('/me/player/play',     'PUT'); }
   function pause()    { return transport('/me/player/pause',    'PUT'); }
