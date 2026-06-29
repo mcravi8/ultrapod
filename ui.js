@@ -637,9 +637,11 @@ const UI = (() => {
   }
 
   function startClock() {
+    const node = el('status-time');
+    if (!node) return;          // status bar removed in full-screen layout (OS shows the time)
     const tick = () => {
       const d = new Date();
-      el('status-time').textContent =
+      node.textContent =
         String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     };
     tick();
