@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>UltraPod</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+
+  <!-- PWA / iOS home-screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UltraPod">
+  <meta name="theme-color" content="#0a0a0c">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="scaler">
+  <div class="stage" id="stage">
+
+    <!-- ambient glow -->
+    <div class="glow glow-blue"></div>
+    <div class="glow glow-purple"></div>
+    <div class="glow glow-shadow"></div>
+
+    <!-- ============ iPod BODY ============ -->
+    <div class="ipod">
+      <!-- metal side buttons -->
+      <div class="btn-side left btn-mute"></div>
+      <div class="btn-side left btn-volup"></div>
+      <div class="btn-side left btn-voldn"></div>
+      <div class="btn-side right btn-power"></div>
+      <!-- polished sheen + inner bevel -->
+      <div class="ipod-sheen"></div>
+      <div class="ipod-bevel"></div>
+
+      <div class="ipod-inner">
+
+        <!-- ============ CONTENT PANEL (the screen) ============ -->
+        <div class="screen" id="screen">
+
+          <!-- ===== MENU VIEW (sidebar + mini cover flow) ===== -->
+          <!-- 'active' here (and on Playlists below) makes the menu paint on
+               the first frame, matching the reference's default state. -->
+          <div class="view active" id="view-menu">
+            <!-- mini cover flow -->
+            <div class="menu-cf">
+              <div class="art menu-cf-side menu-cf-left"  id="menu-cf-left"></div>
+              <div class="art menu-cf-side menu-cf-right" id="menu-cf-right"></div>
+              <div class="menu-cf-center">
+                <div class="art menu-cf-center-art" id="menu-cf-center"></div>
+              </div>
+            </div>
+            <div class="menu-cf-label">
+              <div class="menu-cf-title" id="menu-cf-title">UltraPod</div>
+              <div class="menu-cf-sub" id="menu-cf-sub">Spotify</div>
+            </div>
+
+            <!-- sidebar menu -->
+            <div class="menu-sidebar" id="menu-sidebar">
+              <div class="menu-item" data-idx="0">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"></path></svg></span>
+                <span class="mi-label">Now Playing</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+              <div class="menu-item" data-idx="1">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="12" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2"></path></svg></span>
+                <span class="mi-label">Album Carousel</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+              <div class="menu-item" data-idx="2">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"></path><circle cx="6.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="16" r="2.5"></circle></svg></span>
+                <span class="mi-label">All Music</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+              <div class="menu-item active" data-idx="3">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="14" y2="17"></line></svg></span>
+                <span class="mi-label">Playlists</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+              <div class="menu-item" data-idx="4">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"></circle><line x1="20" y1="20" x2="15.6" y2="15.6"></line></svg></span>
+                <span class="mi-label">Search</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+              <div class="menu-item" data-idx="5">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"></path></svg></span>
+                <span class="mi-label">Artists</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+              <div class="menu-item" data-idx="6">
+                <span class="mi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2"></circle></svg></span>
+                <span class="mi-label">Albums</span>
+                <span class="mi-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== NOW PLAYING ===== -->
+          <div class="view" id="view-nowplaying">
+            <div class="art np-art" id="np-art"></div>
+            <div class="np-title"  id="np-title">Nothing playing</div>
+            <div class="np-artist" id="np-artist">—</div>
+            <div class="np-progress">
+              <div class="np-bar">
+                <div class="np-bar-fill" id="np-fill"></div>
+                <div class="np-bar-knob" id="np-knob"></div>
+              </div>
+              <div class="np-times"><span id="np-cur">0:00</span><span id="np-dur">0:00</span></div>
+            </div>
+            <div class="np-controls">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8e8e94" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"></path><path d="M21 3L4 20"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l4 4"></path></svg>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1ed760" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg>
+            </div>
+          </div>
+
+          <!-- ===== COVER FLOW (full) ===== -->
+          <div class="view" id="view-coverflow">
+            <div class="cf">
+              <div class="art cf-side cf-left"  id="cf-left"></div>
+              <div class="art cf-side cf-right" id="cf-right"></div>
+              <div class="cf-center">
+                <div class="art cf-center-art" id="cf-center"></div>
+              </div>
+            </div>
+            <div class="cf-label">
+              <div class="cf-title" id="cf-title">—</div>
+              <div class="cf-sub"   id="cf-sub">—</div>
+            </div>
+          </div>
+
+          <!-- ===== PLAYLISTS ===== -->
+          <div class="view" id="view-playlists">
+            <div class="list" id="list-playlists"></div>
+          </div>
+
+          <!-- ===== ARTISTS ===== -->
+          <div class="view" id="view-artists">
+            <div class="list artists" id="list-artists"></div>
+          </div>
+
+          <!-- ===== ALBUMS ===== -->
+          <div class="view" id="view-albums">
+            <div class="album-grid" id="grid-albums"></div>
+          </div>
+
+          <!-- ===== SEARCH ===== -->
+          <div class="view" id="view-search">
+            <div class="search-view">
+              <div class="search-box">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e94" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"></circle><line x1="20" y1="20" x2="15.6" y2="15.6"></line></svg>
+                <input class="search-input" id="search-input" type="text" placeholder="Search music" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+              </div>
+              <div id="search-recent">
+                <div class="search-recent-label">RECENT</div>
+                <div class="search-recent" id="search-chips"></div>
+              </div>
+              <div class="search-results" id="search-results" style="display:none;"></div>
+            </div>
+          </div>
+
+          <!-- ===== ALBUM DETAIL ===== -->
+          <div class="view" id="view-albumdetail">
+            <div class="art detail-art" id="detail-art"></div>
+            <div class="detail-title" id="detail-title">—</div>
+            <div class="detail-sub"   id="detail-sub">—</div>
+            <div class="detail-tracks" id="detail-tracks"></div>
+          </div>
+
+          <!-- toast overlay -->
+          <div class="toast" id="toast"></div>
+
+        </div><!-- /.screen -->
+
+        <!-- ============ CLICK WHEEL ============ -->
+        <div class="wheel-area">
+          <div class="wheel" id="wheel">
+            <div class="wheel-menu"   id="btn-menu">MENU</div>
+            <div class="wheel-next"   id="btn-next">&#9654;&#9654;</div>
+            <div class="wheel-prev"   id="btn-prev">&#9664;&#9664;</div>
+            <div class="wheel-play"   id="btn-play">&#9655; &#9614;&#9614;</div>
+            <div class="wheel-center" id="btn-center"></div>
+          </div>
+        </div>
+
+        <!-- status bar / dynamic island / home bar -->
+        <div class="statusbar">
+          <div class="status-time" id="status-time">9:41</div>
+          <div class="status-icons">
+            <svg width="17" height="13" viewBox="0 0 18 14" fill="#fff"><path d="M9 2.1c2.7 0 5.2 1 7.1 2.8l-1.3 1.4C13.2 4.8 11.2 4 9 4S4.8 4.8 3.2 6.3L1.9 4.9C3.8 3.1 6.3 2.1 9 2.1zm0 3.4c1.7 0 3.3.6 4.5 1.8l-1.4 1.4C11.3 8 10.2 7.5 9 7.5s-2.3.5-3.1 1.2L4.5 7.3C5.7 6.1 7.3 5.5 9 5.5zm0 3.5c.8 0 1.5.3 2 .9L9 12 7 9.9c.5-.6 1.2-.9 2-.9z"></path></svg>
+            <svg width="26" height="13" viewBox="0 0 28 14" fill="none"><rect x="1" y="2" width="22" height="10" rx="2.6" stroke="rgba(255,255,255,0.45)" stroke-width="1"></rect><rect x="2.6" y="3.6" width="16.5" height="6.8" rx="1.4" fill="#fff"></rect><rect x="24.4" y="5" width="1.8" height="4" rx="0.9" fill="rgba(255,255,255,0.5)"></rect></svg>
+          </div>
+        </div>
+        <div class="island"><div class="island-cam"></div></div>
+        <div class="homebar"></div>
+
+      </div><!-- /.ipod-inner -->
+    </div><!-- /.ipod -->
+  </div><!-- /.stage -->
+</div><!-- /#scaler -->
+
+  <!-- App modules (load order: config -> auth -> spotify -> player -> ui) -->
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="spotify.js"></script>
+  <script src="player.js"></script>
+  <script src="ui.js"></script>
+  <!-- Spotify Web Playback SDK (loaded after player.js defines the ready callback) -->
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+</body>
+</html>

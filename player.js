@@ -1,0 +1,108 @@
+/* ============================================================
+   UltraPod — player.js
+   Spotify Web Playback SDK init + click-wheel button bindings.
+
+   The SDK calls window.onSpotifyWebPlaybackSDKReady once
+   https://sdk.scdn.co/spotify-player.js has loaded. We do NOT build/connect
+   the player there directly — ui.js calls Player.start() only AFTER auth has
+   succeeded, so the SDK never forces a login redirect on its own (which would
+   bypass the not-configured / insecure-context gating in ui.js).
+
+   NOTE: the Web Playback SDK streams audio only in desktop browsers.
+   On iOS Safari it still registers as a device and the controls below
+   drive whatever device is active (or surface "Premium required").
+   ============================================================ */
+const Player = (() => {
+  let _player = null;
+  let _deviceId = null;
+  let _ready = false;
+  let _paused = true;       // tracked from player_state_changed for fallback toggle
+  let _sdkLoaded = false;   // SDK script finished loading
+  let _started = false;     // ui.js authorised us to connect
+
+  // Build + connect the player. Safe to call once; guarded by _player.
+  function build() {
+    if (_player || typeof Spotify === 'undefined' || !Spotify.Player) return;
+
+    _player = new Spotify.Player({
+      name: 'UltraPod',
+      // On token failure hand the SDK an empty token so it raises
+      // authentication_error immediately (handled below) instead of stalling
+      // until its internal timeout.
+      getOAuthToken: cb => { Auth.getToken().then(cb).catch(() => cb('')); },
+      volume: 0.8
+    });
+
+    // ---- ready / not-ready --------------------------------------------
+    _player.addListener('ready', ({ device_id }) => {
+      _deviceId = device_id;
+      _ready = true;
+      // Register the device with the API module and make this browser
+      // the active playback device.
+      SpotifyAPI.setDeviceId(device_id);
+      SpotifyAPI.transferPlayback(device_id, false);
+    });
+
+    _player.addListener('not_ready', ({ device_id }) => {
+      _ready = false;
+      console.warn('Device went offline', device_id);
+    });
+
+    // ---- errors -------------------------------------------------------
+    const premiumMsg = () => { if (window.UI) UI.toast('Premium required for playback'); };
+    _player.addListener('initialization_error', ({ message }) => console.warn('init_error', message));
+    _player.addListener('authentication_error', ({ message }) => {
+      // Do NOT redirect to login here — the SDK re-requests a token via
+      // getOAuthToken (which refreshes on its own), and auto-login from this
+      // listener can cause an endless authorize loop (esp. for non-Premium /
+      // scope issues). Just surface it.
+      console.warn('auth_error', message);
+      if (window.UI) UI.toast('Playback needs Spotify Premium');
+    });
+    _player.addListener('account_error', ({ message }) => { console.warn('account_error', message); premiumMsg(); });
+    _player.addListener('playback_error', ({ message }) => console.warn('playback_error', message));
+
+    // ---- state changes -> update Now Playing --------------------------
+    _player.addListener('player_state_changed', (state) => {
+      if (!state) return;
+      _paused = state.paused;
+      if (window.UI && UI.onPlayerState) UI.onPlayerState(state);
+    });
+
+    _player.connect();
+  }
+
+  // The SDK invokes this global when the script finishes loading.
+  window.onSpotifyWebPlaybackSDKReady = function () {
+    _sdkLoaded = true;
+    if (_started) build();          // ui.js already authorised us
+  };
+
+  // Called by ui.js once authentication has succeeded.
+  function start() {
+    _started = true;
+    if (_sdkLoaded) build();        // else build() runs when the SDK loads
+  }
+
+  // ---- public playback controls (used by the click wheel) ------------
+  // Prefer the in-browser SDK when it is the active/ready device; otherwise
+  // (e.g. iOS Safari, where the SDK can't stream) drive the user's active
+  // device through the Web API so the buttons still work.
+  function previousTrack() {
+    if (_ready && _player) _player.previousTrack().catch(() => SpotifyAPI.previous());
+    else SpotifyAPI.previous();
+  }
+  function nextTrack() {
+    if (_ready && _player) _player.nextTrack().catch(() => SpotifyAPI.next());
+    else SpotifyAPI.next();
+  }
+  function togglePlay() {
+    if (_ready && _player) _player.togglePlay().catch(() => fallbackToggle());
+    else fallbackToggle();
+  }
+  function fallbackToggle() { return _paused ? SpotifyAPI.resume() : SpotifyAPI.pause(); }
+  function getDeviceId()   { return _deviceId; }
+  function isReady()       { return _ready; }
+
+  return { start, previousTrack, nextTrack, togglePlay, getDeviceId, isReady };
+})();

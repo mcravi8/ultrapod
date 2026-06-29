@@ -1,0 +1,254 @@
+/* ============================================================
+   UltraPod — style.css
+   All styles extracted from the reference UI (UltraPod App).
+   The design canvas is a fixed 720 x 1100 stage that ui.js scales
+   to fit the viewport. Every value below is taken verbatim from the
+   reference's inline styles.
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+html, body { height: 100%; }
+
+body {
+  background: #0a0a0c;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes upblink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
+
+/* ---- viewport scaler / fixed design stage -------------------------- */
+#scaler { position: fixed; inset: 0; overflow: hidden; background: #0a0a0c; }
+
+.stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 720px;
+  height: 1100px;
+  transform: translate(-50%, -50%) scale(1);
+  transform-origin: center center;
+  overflow: hidden;
+  background: #0a0a0c;
+}
+
+/* ---- ambient glow blobs -------------------------------------------- */
+.glow { position: absolute; pointer-events: none; }
+.glow-blue   { top: 120px; left: 10px; width: 360px; height: 560px; background: radial-gradient(ellipse at center, rgba(40,60,120,0.16), transparent 65%); filter: blur(40px); }
+.glow-purple { bottom: 90px; right: 0; width: 360px; height: 560px; background: radial-gradient(ellipse at center, rgba(30,170,85,0.15), transparent 65%); filter: blur(40px); }
+.glow-shadow { bottom: 120px; left: 50%; transform: translateX(-50%); width: 400px; height: 90px; background: radial-gradient(ellipse at center, rgba(0,0,0,0.7), transparent 72%); filter: blur(30px); }
+
+/* ---- iPod metal body ----------------------------------------------- */
+.ipod {
+  position: absolute; left: 50%; top: 146px; transform: translateX(-50%);
+  width: 384px; height: 808px; border-radius: 58px;
+  background: linear-gradient(100deg, #9498a1 0%, #45454c 4%, #2b2b2f 10%, #232327 50%, #2b2b2f 90%, #45454c 96%, #9498a1 100%);
+  box-shadow: 0 50px 110px -24px rgba(0,0,0,0.85), 0 24px 56px -14px rgba(0,0,0,0.7), inset 0 2px 1px rgba(255,255,255,0.34), inset 0 -3px 4px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.14);
+  padding: 4px;
+}
+
+/* metal side buttons */
+.btn-side { position: absolute; z-index: 2; }
+.btn-side.left  { left: -2.5px;  width: 5px; border-radius: 3px 1px 1px 3px; background: linear-gradient(90deg,#8b8b94,#2b2b2f);  box-shadow: -1px 0 2px rgba(0,0,0,0.5), inset 1px 0 1px rgba(255,255,255,0.35); }
+.btn-side.right { right: -2.5px; width: 5px; border-radius: 1px 3px 3px 1px; background: linear-gradient(270deg,#8b8b94,#2b2b2f); box-shadow: 1px 0 2px rgba(0,0,0,0.5), inset -1px 0 1px rgba(255,255,255,0.35); }
+.btn-mute  { top: 150px; height: 26px; }
+.btn-volup { top: 198px; height: 48px; }
+.btn-voldn { top: 256px; height: 48px; }
+.btn-power { top: 228px; height: 74px; }
+
+.ipod-sheen { position: absolute; inset: 0; border-radius: 58px; background: linear-gradient(125deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 20%, rgba(255,255,255,0) 80%, rgba(255,255,255,0.12) 100%); pointer-events: none; z-index: 1; }
+.ipod-bevel { position: absolute; inset: 4px; border-radius: 54px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9), inset 0 0 0 2.5px rgba(255,255,255,0.1), inset 0 1px 2px rgba(255,255,255,0.14); pointer-events: none; z-index: 60; }
+.ipod-inner { position: absolute; inset: 8px; border-radius: 50px; overflow: hidden; background: #000; }
+
+/* ---- the screen / content panel ------------------------------------ */
+.screen {
+  position: absolute; top: 52px; left: 12px; right: 12px; height: 412px;
+  border-radius: 30px; overflow: hidden; background: #000;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07), inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 18px rgba(0,0,0,0.5);
+}
+
+/* ---- view container toggling --------------------------------------- */
+.view { position: absolute; inset: 0; z-index: 10; display: none; }
+.view.active { display: block; }
+
+/* shared album-art element (img over a gradient fallback) */
+.art { position: relative; overflow: hidden; }
+.art-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* generic empty / loading state */
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #6a6a70; font-size: 13px; text-align: center; padding: 0 36px; line-height: 1.5; }
+
+/* ============================================================
+   MENU VIEW (sidebar + mini cover flow)
+   ============================================================ */
+.menu-cf { position: absolute; left: 183px; right: 0; top: 60px; height: 170px; perspective: 760px; z-index: 10; }
+.menu-cf-side   { position: absolute; top: 50%; width: 88px; height: 88px; z-index: 1; border-radius: 5px; overflow: hidden; box-shadow: 0 14px 24px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.08); }
+.menu-cf-left   { left: 18px;  transform: translate(-50%,-50%) rotateY(50deg)  scale(0.92); filter: brightness(0.70); }
+.menu-cf-right  { left: 130px; transform: translate(-50%,-50%) rotateY(-50deg) scale(0.92); filter: brightness(0.72); }
+.menu-cf-center { position: absolute; top: 50%; left: 74px; transform: translate(-50%,-50%); z-index: 3; }
+.menu-cf-center-art { position: relative; width: 116px; height: 116px; border-radius: 6px; overflow: hidden; box-shadow: 0 22px 34px -8px rgba(0,0,0,0.78), inset 0 0 0 1px rgba(255,255,255,0.12); }
+.menu-cf-label { position: absolute; top: 258px; left: 183px; right: 8px; text-align: center; z-index: 10; }
+.menu-cf-title { font-size: 14.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-cf-sub   { margin-top: 4px; font-size: 11px; color: #8b8b92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.menu-sidebar {
+  position: absolute; top: 0; left: 0; width: 183px; height: 100%; padding-top: 16px; z-index: 20;
+  background: linear-gradient(180deg, rgba(28,28,32,0.74), rgba(15,15,19,0.68));
+  -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4);
+  border-right: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 1px 0 0 rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.menu-item { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 50px; font-size: 13px; cursor: pointer; }
+.menu-item .mi-icon  { display: flex; color: #8e8e94; }
+.menu-item .mi-label { flex: 1; color: #dadade; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-item .mi-chev  { display: flex; color: #5f5f66; }
+.menu-item.active {
+  margin: 2px 8px; padding: 0 11px; height: 46px; border-radius: 13px; font-weight: 600;
+  background: linear-gradient(118deg,#1ed760,#1db954);
+  box-shadow: 0 7px 18px rgba(29,185,84,0.42), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.menu-item.active .mi-icon  { color: #fff; }
+.menu-item.active .mi-label { color: #fff; }
+.menu-item.active .mi-chev  { color: rgba(255,255,255,0.85); }
+
+/* ============================================================
+   NOW PLAYING VIEW
+   ============================================================ */
+.np-art { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); width: 150px; height: 150px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 36px -10px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.12); }
+.np-title  { position: absolute; top: 196px; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 700; color: #fff; padding: 0 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-artist { position: absolute; top: 220px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: #8b8b92; padding: 0 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-progress { position: absolute; top: 256px; left: 44px; right: 44px; }
+.np-bar { position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.16); }
+.np-bar-fill { position: absolute; left: 0; top: 0; height: 4px; width: 0%; border-radius: 2px; background: #fff; }
+.np-bar-knob { position: absolute; left: 0%; top: 50%; transform: translate(-50%,-50%); width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.12); }
+.np-times { display: flex; justify-content: space-between; margin-top: 9px; font-size: 10px; color: #8b8b92; }
+.np-controls { position: absolute; top: 312px; left: 44px; right: 44px; display: flex; align-items: center; justify-content: space-between; }
+
+/* ============================================================
+   COVER FLOW VIEW (full)
+   ============================================================ */
+.cf { position: absolute; left: 0; right: 0; top: 64px; height: 210px; perspective: 900px; }
+.cf-side { position: absolute; top: 50%; width: 120px; height: 120px; z-index: 1; border-radius: 6px; overflow: hidden; box-shadow: 0 18px 30px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.08); }
+.cf-left  { left: 78px;  transform: translate(-50%,-50%) rotateY(52deg)  scale(0.9); filter: brightness(0.62); }
+.cf-right { left: 258px; transform: translate(-50%,-50%) rotateY(-52deg) scale(0.9); filter: brightness(0.66); }
+.cf-center { position: absolute; top: 50%; left: 168px; transform: translate(-50%,-50%); z-index: 3; }
+.cf-center-art { position: relative; width: 150px; height: 150px; border-radius: 8px; overflow: hidden; box-shadow: 0 26px 40px -8px rgba(0,0,0,0.78), inset 0 0 0 1px rgba(255,255,255,0.12); }
+.cf-label { position: absolute; top: 300px; left: 0; right: 0; text-align: center; padding: 0 20px; }
+.cf-title { font-size: 16px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-sub   { margin-top: 4px; font-size: 11.5px; color: #8b8b92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================
+   LIST VIEWS (playlists / artists)
+   ============================================================ */
+.list { position: absolute; inset: 0; z-index: 10; padding: 16px 10px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.list-row { display: flex; align-items: center; gap: 13px; padding: 0 12px; height: 58px; cursor: pointer; border-radius: 12px; }
+.list-row.sel { background: rgba(255,255,255,0.08); }
+.list-art { width: 38px; height: 38px; border-radius: 7px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+.list-name { flex: 1; font-size: 13px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-chev { display: flex; color: #5f5f66; }
+
+.list.artists .list-row { height: 54px; }
+.list.artists .list-art { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+
+/* ============================================================
+   ALBUMS GRID
+   ============================================================ */
+.album-grid { position: absolute; inset: 0; z-index: 10; padding: 18px 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px 12px; align-content: start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.album-cell { cursor: pointer; }
+.album-art { width: 100%; aspect-ratio: 1; border-radius: 7px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+.album-cell.sel .album-art { box-shadow: inset 0 0 0 2px #1ed760, 0 0 0 3px rgba(30,215,96,0.35); }
+.album-name { margin-top: 6px; font-size: 10.5px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.album-artist { font-size: 9px; color: #8b8b92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================
+   SEARCH VIEW
+   ============================================================ */
+.search-view { position: absolute; inset: 0; z-index: 10; padding: 20px 18px; }
+.search-box { height: 38px; border-radius: 19px; background: rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); display: flex; align-items: center; gap: 9px; padding: 0 14px; }
+.search-input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 12px; font-family: inherit; caret-color: #fff; -webkit-user-select: text; user-select: text; }
+.search-input::placeholder { color: #6a6a70; }
+.search-recent-label { margin-top: 22px; font-size: 10.5px; font-weight: 600; letter-spacing: 1px; color: #6a6a70; }
+.search-recent { margin-top: 13px; display: flex; flex-wrap: wrap; gap: 9px; }
+.chip { padding: 6px 13px; border-radius: 15px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); color: #c9c9cf; font-size: 11.5px; cursor: pointer; }
+.search-results { position: absolute; left: 18px; right: 18px; top: 70px; bottom: 8px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.section-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; color: #6a6a70; margin: 12px 4px 4px; }
+.result-row { display: flex; align-items: center; gap: 11px; padding: 7px 6px; cursor: pointer; border-radius: 9px; }
+.result-row.sel { background: rgba(255,255,255,0.08); }
+.result-art { width: 34px; height: 34px; border-radius: 6px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+.result-art.artist { border-radius: 50%; }
+.result-name { flex: 1; font-size: 12px; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-sub { font-size: 10px; color: #8b8b92; flex: none; }
+
+/* ============================================================
+   ALBUM DETAIL VIEW
+   ============================================================ */
+.detail-art { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 120px; height: 120px; border-radius: 9px; overflow: hidden; box-shadow: 0 18px 32px -8px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.12); }
+.detail-title { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 700; color: #fff; padding: 0 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail-sub { position: absolute; top: 175px; left: 0; right: 0; text-align: center; font-size: 12px; color: #8b8b92; }
+.detail-tracks { position: absolute; top: 204px; left: 6px; right: 6px; bottom: 10px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.track-row { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 30px; cursor: pointer; }
+.track-num { width: 16px; font-size: 11px; color: #6a6a70; text-align: center; display: flex; align-items: center; justify-content: center; }
+.track-name { flex: 1; font-size: 12px; color: #d8d8dc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-dur { font-size: 10.5px; color: #8b8b92; }
+.track-row.sel { background: rgba(255,255,255,0.07); border-radius: 9px; }
+.track-row.playing {
+  margin: 1px 6px; padding: 0 8px; height: 31px; border-radius: 9px;
+  background: linear-gradient(118deg,#1ed760,#1db954); box-shadow: 0 6px 14px rgba(29,185,84,0.4);
+}
+.track-row.playing .track-name { color: #fff; font-weight: 600; }
+.track-row.playing .track-dur  { color: rgba(255,255,255,0.85); }
+.track-row.playing .track-num  { color: #fff; }
+
+/* ============================================================
+   CLICK WHEEL
+   ============================================================ */
+.wheel-area { position: absolute; top: 460px; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; z-index: 15; }
+.wheel {
+  position: relative; width: 236px; height: 236px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #242428, #18181b 56%, #0c0c0e);
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.07), inset 0 -12px 26px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.05), 0 10px 26px -6px rgba(0,0,0,0.5);
+  touch-action: none;
+}
+.wheel-menu { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: rgba(255,255,255,0.62); }
+.wheel-next { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
+.wheel-prev { position: absolute; top: 50%; left: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
+.wheel-play { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,0.55); }
+.wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 66%, #2b2b2f 0%, #161619 58%, #0b0b0d 100%); box-shadow: inset 0 7px 12px rgba(0,0,0,0.78), inset 0 -4px 6px rgba(255,255,255,0.07), inset 0 0 0 1px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06); }
+
+/* ---- status bar / dynamic island / home bar ------------------------ */
+.statusbar { position: absolute; top: 0; left: 0; right: 0; height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; z-index: 45; }
+.status-time { font-size: 14px; font-weight: 600; color: #fff; padding-top: 8px; }
+.status-icons { display: flex; align-items: center; gap: 7px; padding-top: 8px; }
+.island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 112px; height: 33px; border-radius: 18px; background: #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); z-index: 48; }
+.island-cam { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #2a2a3a, #050507); }
+.homebar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 122px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.32); z-index: 48; }
+
+/* ---- click-wheel tactile feedback + selection "tick" pulse --------- */
+.wheel-menu:active, .wheel-prev:active, .wheel-next:active, .wheel-play:active { color: rgba(255,255,255,0.95); }
+.wheel-center:active {
+  box-shadow: inset 0 10px 17px rgba(0,0,0,0.85), inset 0 -3px 5px rgba(255,255,255,0.05), inset 0 0 0 1px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05);
+  transform: translateY(0.5px);
+}
+/* brief scale-pop fired on the highlighted item each time the wheel ticks */
+@keyframes pop { 0% { transform: scale(0.94); } 55% { transform: scale(1.03); } 100% { transform: scale(1); } }
+.pop { animation: pop 0.13s ease-out; }
+/* snappy highlight transitions so scrolling feels immediate */
+.list-row, .result-row, .track-row { transition: background-color 0.08s ease; }
+.album-art { transition: box-shadow 0.1s ease; }
+
+/* ---- toast overlay (errors / premium notice) ----------------------- */
+.toast {
+  position: absolute; left: 16px; right: 16px; bottom: 18px; margin: 0 auto; max-width: 320px;
+  padding: 10px 18px; border-radius: 14px; text-align: center;
+  background: rgba(20,20,24,0.92); color: #fff; font-size: 12.5px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.08);
+  z-index: 100; opacity: 0; transition: opacity 0.25s ease; pointer-events: none;
+}
+.toast.show { opacity: 1; }

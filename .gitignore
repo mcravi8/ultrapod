@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# local dev server logs
+*.log
+
+# the design reference (not part of the shipped app)
+UltraPod App (standalone).html
+
+# gstack browse tooling (local only)
+.gstack/
