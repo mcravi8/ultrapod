@@ -126,21 +126,45 @@ const UI = (() => {
       return ctx;
     }
 
-    // iOS keeps a fresh AudioContext "suspended" until a sound actually plays
-    // inside a user gesture. resume() alone is async, so the very first tick/
-    // press — scheduled synchronously right after — was silent until something
-    // ELSE woke the audio session (e.g. Spotify audio starting). That's the
-    // "no click until music plays" bug. Fix: on the first touch, resume AND
-    // play a 1-frame silent buffer to force the context to 'running' now. Re-run
-    // it each gesture (cheap, guarded) so it also recovers if iOS re-suspends
-    // the context after the app is backgrounded.
+    // iOS keeps a fresh AudioContext silent until real audio has played inside
+    // a user gesture. In a standalone PWA the WebAudio click can stay silent
+    // even after resume() — until an actual MEDIA ELEMENT has played and woken
+    // the audio session (the "no click until music plays" bug). So on first
+    // touch we (1) play a short silent <audio> element once to activate the iOS
+    // audio session, and (2) play a 1-frame silent WebAudio buffer. After that
+    // the oscillator ticks below are audible.
+    let htmlKicked = false;
+    function htmlAudioKick() {
+      if (htmlKicked) return;
+      htmlKicked = true;
+      try {
+        // ~0.2s of 8-bit mono silence at 8 kHz, as a WAV blob.
+        const rate = 8000, len = Math.floor(rate * 0.2);
+        const buf = new ArrayBuffer(44 + len);
+        const dv = new DataView(buf);
+        const s = (o, str) => { for (let i = 0; i < str.length; i++) dv.setUint8(o + i, str.charCodeAt(i)); };
+        s(0, 'RIFF'); dv.setUint32(4, 36 + len, true); s(8, 'WAVE');
+        s(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+        dv.setUint16(22, 1, true); dv.setUint32(24, rate, true); dv.setUint32(28, rate, true);
+        dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+        s(36, 'data'); dv.setUint32(40, len, true);
+        for (let i = 0; i < len; i++) dv.setUint8(44 + i, 128);   // 8-bit silence = 128
+        const a = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+        a.setAttribute('playsinline', '');
+        a.volume = 1;                 // samples are silent, so nothing is heard
+        const p = a.play();
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+
     function unlock() {
       const c = resume();
+      htmlAudioKick();                // wake the iOS media session (needed in a PWA)
       if (!c) return;
       // Replay the 1-frame silent buffer whenever the context isn't 'running'
       // (first gesture, or after iOS re-suspends it when the PWA is
-      // backgrounded) to force it back to running synchronously. Guarding on
-      // state (not a one-shot latch) is what makes recovery actually work.
+      // backgrounded) to force it back to running. Guarding on state (not a
+      // one-shot latch) is what makes recovery actually work.
       if (c.state !== 'running') {
         try {
           const buf = c.createBuffer(1, 1, 22050);
@@ -219,11 +243,13 @@ const UI = (() => {
       haptic(12);
     }
 
-    // Prime/unlock audio on the very first interaction anywhere — capture phase
-    // so it runs before the wheel/button click handlers fire their first blip.
+    // Prime/unlock audio on the first interactions anywhere — capture phase so
+    // it runs before the wheel/button handlers fire their first blip. iOS only
+    // honours certain gestures for audio unlock, so cover pointer, touch AND
+    // click (the wheel scroll never fires a click; taps fire touchend/click).
     const prime = () => unlock();
-    document.addEventListener('pointerdown', prime, { capture: true });
-    document.addEventListener('touchstart', prime, { capture: true, passive: true });
+    ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click'].forEach(ev =>
+      document.addEventListener(ev, prime, { capture: true, passive: true }));
 
     return { resume, unlock, tick, press, haptic };
   })();
@@ -542,6 +568,9 @@ const UI = (() => {
         paintProgress();
       }
     } else if (state.view === 'nowplaying' && !optimistic) {
+      // Reset the tracked state too, else the 500ms ticker keeps painting the
+      // stale optimistic position on top (the "Nothing playing / 0:17" glitch).
+      state.np = { progress_ms: 0, duration_ms: 0, is_playing: false, baseTime: Date.now() };
       el('np-title').textContent = 'Nothing playing';
       el('np-artist').textContent = 'Open a playlist or album to start';
       setArtGradient(el('np-art'), GRADS[0]);
@@ -857,11 +886,11 @@ const UI = (() => {
     const item = rows[idx];
     if (!item) return;
     const al = state.detailAlbum;
-    if (view === 'playlists')      { SpotifyAPI.playContext(item.uri).catch(noop); go('nowplaying'); }
-    else if (view === 'artists')   { SpotifyAPI.playContext(item.uri).catch(noop); go('nowplaying'); }
+    if (view === 'playlists')      { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
+    else if (view === 'artists')   { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
     else if (view === 'albums')    { openAlbumDetail(item); }
     else if (view === 'albumdetail') {
-      SpotifyAPI.playTracks(state.detailUris, idx).catch(noop);
+      afterPlay(SpotifyAPI.playTracks(state.detailUris, idx));
       go('nowplaying');
       showNowPlayingOptimistic({
         name: item.name, uri: item.uri, duration_ms: item.duration_ms,
@@ -869,12 +898,24 @@ const UI = (() => {
       });
     }
     else if (view === 'search') {
-      if (item.type === 'track')      { SpotifyAPI.playTracks([item.uri], 0).catch(noop); go('nowplaying'); showNowPlayingOptimistic(item); }
+      if (item.type === 'track')      { afterPlay(SpotifyAPI.playTracks([item.uri], 0)); go('nowplaying'); showNowPlayingOptimistic(item); }
       else if (item.type === 'album') { openAlbumDetail(item); }
-      else if (item.type === 'artist') { SpotifyAPI.playContext(item.uri).catch(noop); go('nowplaying'); }
+      else if (item.type === 'artist') { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
     }
   }
   function noop() {}
+  // play() resolves false when it could not start (no device / Premium — it has
+  // already toasted). Clear the optimistic Now Playing so we don't keep showing
+  // a ghost track ticking forward; snap back to the real "Nothing playing".
+  function afterPlay(p) {
+    Promise.resolve(p).then(ok => {
+      if (ok === false) {
+        state.npOptimisticUntil = 0;
+        state.np = { progress_ms: 0, duration_ms: 0, is_playing: false, baseTime: Date.now() };
+        if (state.view === 'nowplaying') refreshNowPlaying();
+      }
+    }).catch(() => {});
+  }
 
   // ===================================================================
   //  Click wheel: center + scroll dispatch
