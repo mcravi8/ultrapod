@@ -9,6 +9,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
 html, body { height: 100%; }
+html { background: #b6bac1; }   /* silver canvas behind everything (incl. iOS home-bar strip) */
 
 body {
   background: #b6bac1;          /* silver, so no black ever shows behind the body */
