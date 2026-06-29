@@ -299,7 +299,7 @@ const UI = (() => {
 
   // menu item activation
   function setMi(i) {
-    state.mi = clamp(i, 0, 7);
+    state.mi = clamp(i, 0, 5);
     document.querySelectorAll('#menu-sidebar .menu-item').forEach(node => {
       node.classList.toggle('active', +node.dataset.idx === state.mi);
     });
@@ -309,13 +309,11 @@ const UI = (() => {
     setMi(i);
     switch (i) {
       case 0: go('nowplaying'); break;
-      case 1: go('coverflow');  break;
-      case 2: openAllMusic();   break;   // Liked Songs as a tracklist
-      case 3: go('playlists');  break;
+      case 1: go('coverflow');  break;   // Cover Flow (recently played)
+      case 2: go('playlists');  break;
+      case 3: openAllMusic();   break;   // Songs = Liked Songs as a tracklist
       case 4: go('search');     break;
-      case 5: go('artists');    break;
-      case 6: go('albums');     break;
-      case 7: go('devices');    break;
+      case 5: go('devices');    break;
     }
   }
 
@@ -366,7 +364,7 @@ const UI = (() => {
     const e = Math.min(A, 1);                 // ease 0..1 over the first unit of offset
     const rot = -s * e * 62;                  // center flat; right tilts -62°, left +62°
     const z = -e * 190;                       // center forward, sides pushed back in Z
-    const centerGap = 96, stack = 42;         // gap to first neighbour, then tight stacking
+    const centerGap = 109, stack = 48;        // gap to first neighbour, then tight stacking (scaled with the bigger covers)
     const x = A <= 1 ? o * centerGap : s * (centerGap + (A - 1) * stack);
     const scale = 1 - e * 0.18;               // center largest
     return { x, z, rot, scale };
@@ -541,6 +539,7 @@ const UI = (() => {
   // ===================================================================
   async function openAlbumDetail(album) {
     state.detailAlbum = album;            // reused for optimistic Now Playing art/artist
+    state.detailContextUri = null;        // albums play via the track-uri list
     setArt(el('detail-art'), album.image, album.id || album.name, 'album');
     el('detail-title').textContent = album.name;
     el('detail-sub').textContent = album.artist + (album.year ? ' · ' + album.year : '');
@@ -557,8 +556,9 @@ const UI = (() => {
 
   async function openAllMusic() {
     state.detailAlbum = null;             // Liked Songs: per-track art/artist comes from the rows
+    state.detailContextUri = null;        // Liked Songs play via the track-uri list
     setArtGradient(el('detail-art'), LIKED_GRAD);
-    el('detail-title').textContent = 'All Music';
+    el('detail-title').textContent = 'Songs';
     el('detail-sub').textContent = 'Liked Songs';
     el('detail-tracks').innerHTML = loadingHTML();
     go('albumdetail');
@@ -566,6 +566,27 @@ const UI = (() => {
     let tracks = [];
     try { tracks = await SpotifyAPI.getSavedTracks(); } catch (e) {}
     el('detail-sub').textContent = tracks.length ? tracks.length + ' songs' : 'Liked Songs';
+    state.rows.albumdetail = tracks;
+    state.detailUris = tracks.map(t => t.uri);
+    state.sel.albumdetail = 0;
+    renderTracks();
+  }
+
+  // Open a playlist into the same tracklist view as albums/songs. Playback uses
+  // the playlist CONTEXT (proper queue/shuffle) rather than a loose uri list.
+  async function openPlaylist(pl) {
+    state.detailAlbum = null;             // per-track art/artist comes from the rows
+    state.detailContextUri = pl.uri;      // play in the playlist's context
+    if (pl.image) setArt(el('detail-art'), pl.image, pl.id || pl.name, 'album');
+    else setArtGradient(el('detail-art'), gradientFor(pl.id || pl.name || 'pl', 'album'));
+    el('detail-title').textContent = pl.name;
+    el('detail-sub').textContent = 'Playlist';
+    el('detail-tracks').innerHTML = loadingHTML();
+    go('albumdetail');
+
+    let tracks = [];
+    try { tracks = await SpotifyAPI.getPlaylistTracks(pl.id); } catch (e) {}
+    el('detail-sub').textContent = tracks.length ? tracks.length + ' songs' : 'Playlist';
     state.rows.albumdetail = tracks;
     state.detailUris = tracks.map(t => t.uri);
     state.sel.albumdetail = 0;
@@ -945,12 +966,17 @@ const UI = (() => {
     const item = rows[idx];
     if (!item) return;
     const al = state.detailAlbum;
-    if (view === 'playlists')      { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
+    if (view === 'playlists')      { openPlaylist(item); }
     else if (view === 'artists')   { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
     else if (view === 'albums')    { openAlbumDetail(item); }
     else if (view === 'devices')   { selectDevice(item); }
     else if (view === 'albumdetail') {
-      afterPlay(SpotifyAPI.playTracks(state.detailUris, idx));
+      // A playlist plays in its own context (queue/shuffle), offset by the
+      // track's uri (robust to filtered items); albums & Liked Songs play from
+      // the plain track-uri list.
+      afterPlay(state.detailContextUri
+        ? SpotifyAPI.playContext(state.detailContextUri, item.uri)
+        : SpotifyAPI.playTracks(state.detailUris, idx));
       go('nowplaying');
       showNowPlayingOptimistic({
         name: item.name, uri: item.uri, duration_ms: item.duration_ms,
@@ -1404,7 +1430,7 @@ const UI = (() => {
     // The menu view + Playlists highlight are present in the static HTML, so
     // the iPod paints on first frame. We only re-assert the highlight here; we
     // must NOT call go('menu') until authenticated (go() loads data via getToken).
-    setMi(3);
+    setMi(2);
 
     if (CONFIG.CLIENT_ID === 'YOUR_CLIENT_ID_HERE' || CONFIG.REDIRECT_URI === 'YOUR_REDIRECT_URI_HERE') {
       toast('Add CLIENT_ID & REDIRECT_URI in config.js');
@@ -1438,7 +1464,7 @@ const UI = (() => {
     // Authenticated: hide sign-in, connect the SDK, load live data.
     hideSignIn();
     Player.start();
-    setMi(3);
+    setMi(2);
     go('menu');
   }
 

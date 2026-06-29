@@ -142,15 +142,17 @@ body {
 /* ============================================================
    NOW PLAYING VIEW
    ============================================================ */
-.np-art { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); width: 150px; height: 150px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 36px -10px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.12); }
-.np-title  { position: absolute; top: 196px; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 700; color: #fff; padding: 0 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.np-artist { position: absolute; top: 220px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: #8b8b92; padding: 0 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.np-progress { position: absolute; top: 256px; left: 44px; right: 44px; }
+/* Now Playing: one stack, centered both axes in the screen */
+#view-nowplaying.active { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 40px; }
+.np-art { width: 188px; height: 188px; border-radius: 12px; overflow: hidden; flex: none; box-shadow: 0 20px 36px -10px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.12); }
+.np-title  { margin-top: 24px; max-width: 100%; text-align: center; font-size: 18px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-artist { margin-top: 5px; max-width: 100%; text-align: center; font-size: 13px; color: #8b8b92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-progress { width: 100%; margin-top: 24px; }
 .np-bar { position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.16); }
 .np-bar-fill { position: absolute; left: 0; top: 0; height: 4px; width: 0%; border-radius: 2px; background: #fff; }
 .np-bar-knob { position: absolute; left: 0%; top: 50%; transform: translate(-50%,-50%); width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.12); }
 .np-times { display: flex; justify-content: space-between; margin-top: 9px; font-size: 10px; color: #8b8b92; }
-.np-controls { position: absolute; top: 312px; left: 44px; right: 44px; display: flex; align-items: center; justify-content: space-between; }
+.np-controls { width: 100%; margin-top: 20px; display: flex; align-items: center; justify-content: space-between; }
 
 /* ============================================================
    COVER FLOW VIEW (full)
@@ -164,7 +166,7 @@ body {
 }
 .cf-cover {
   position: absolute; left: 50%; top: 132px;       /* cards are centred here, then transformed */
-  width: 132px; height: 132px;
+  width: 150px; height: 150px;
   transform-style: preserve-3d; will-change: transform, opacity, filter;
   cursor: pointer;
 }

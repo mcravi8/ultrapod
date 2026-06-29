@@ -219,6 +219,25 @@ const SpotifyAPI = (() => {
       }));
   }
 
+  // GET /v1/playlists/{id}/tracks -> [{ name, artist, image, duration_ms, uri }]
+  // Skips local files and podcast episodes (not playable as plain track uris).
+  async function getPlaylistTracks(playlistId) {
+    const data = await getJSON('/playlists/' + playlistId + '/tracks?limit=100');
+    if (!data || !data.items) return [];
+    return data.items
+      .map(it => it.track)
+      .filter(t => t && t.uri && !t.is_local && t.type === 'track')
+      .map((t, i) => ({
+        name: t.name,
+        duration_ms: t.duration_ms,
+        track_number: i + 1,
+        artist: (t.artists || []).map(a => a.name).join(', '),
+        image: t.album ? smallestImage(t.album.images) : null,
+        uri: t.uri,
+        type: 'track'
+      }));
+  }
+
   // GET /v1/me/player/recently-played?limit=10 -> for Cover Flow
   async function getRecentlyPlayed() {
     const data = await getJSON('/me/player/recently-played?limit=10');
@@ -331,9 +350,14 @@ const SpotifyAPI = (() => {
     return false;
   }
 
-  // PUT /v1/me/player/play  { context_uri }
-  function playContext(contextUri) {
-    return play({ context_uri: contextUri });
+  // PUT /v1/me/player/play  { context_uri, offset? }
+  // offset may be a number (position) OR a track uri string (robust to filtered
+  // lists where positions shift, e.g. a playlist with podcast/local items).
+  function playContext(contextUri, offset) {
+    const body = { context_uri: contextUri };
+    if (typeof offset === 'number') body.offset = { position: offset };
+    else if (typeof offset === 'string') body.offset = { uri: offset };
+    return play(body);
   }
 
   // PUT /v1/me/player/play  { uris, offset }
@@ -424,7 +448,7 @@ const SpotifyAPI = (() => {
   return {
     setDeviceId, setPreferredDevice, getDevices,
     getPlaylists, getFollowedArtists, getSavedAlbums, getAlbumTracks,
-    getSavedTracks, getRecentlyPlayed,
+    getPlaylistTracks, getSavedTracks, getRecentlyPlayed,
     getCurrentlyPlaying, search,
     playContext, playTracks, transferPlayback,
     resume, pause, next, previous,
