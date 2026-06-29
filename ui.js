@@ -202,6 +202,7 @@ const UI = (() => {
   //  View routing
   // ===================================================================
   function go(view) {
+    if (view !== 'search') closeKeyboard();   // leaving search restores the wheel
     state.view = view;
     Object.values(VIEW_ID).forEach(id => { const n = el(id); if (n) n.classList.remove('active'); });
     const node = el(VIEW_ID[view]);
@@ -538,6 +539,12 @@ const UI = (() => {
   function enterSearch() {
     renderChips();
     if (!el('search-input').value.trim()) showRecent();
+    state.searchFocus = 0;
+    applySearchFocus();
+    // Entering Search drops straight into the keyboard (the wheel becomes keys).
+    // Hitting Return (kbdGo) runs the search and turns the keyboard back into
+    // the navigation wheel so the wheel then scrolls through the results.
+    openKeyboard();
   }
 
   function getRecent() {
@@ -554,6 +561,7 @@ const UI = (() => {
     let r = getRecent();
     if (!r.length) r = ['lo-fi', 'ambient', 'jazz', 'focus'];
     el('search-chips').innerHTML = r.map(q => '<div class="chip" data-q="' + esc(q) + '">' + esc(q) + '</div>').join('');
+    if (state.view === 'search') applySearchFocus();   // re-paint focus ring on rebuilt chips
   }
   function showRecent() {
     el('search-results').style.display = 'none';
@@ -600,11 +608,142 @@ const UI = (() => {
       '</div>');
 
     state.rows.search = flat;
-    state.sel.search = 0;
-    if (!flat.length) { cont.innerHTML = emptyHTML('No results'); return; }
+    if (!flat.length) { cont.innerHTML = emptyHTML('No results'); state.searchFocus = 0; applySearchFocus(); return; }
     cont.innerHTML = html;
     flat.forEach((it, idx) => setArt(cont.querySelector('[data-art="' + idx + '"]'), it.image, it.id, it.type === 'artist' ? 'artist' : 'album'));
-    applySel('search');
+    state.searchFocus = 1;             // land on the first result; scroll up reaches the box
+    applySearchFocus();
+  }
+
+  // ===================================================================
+  //  Search wheel-navigation + on-screen keyboard
+  //  Focus model: index 0 = the search box; 1..N = the items currently shown
+  //  (the RECENT chips when idle, or the result rows once a query has run).
+  //  Center on the box opens the keyboard; center on an item activates it.
+  // ===================================================================
+  function searchFocusList() {
+    const resultsShown = el('search-results').style.display !== 'none';
+    const host = resultsShown ? el('search-results') : el('search-chips');
+    const sel = resultsShown ? '.result-row' : '.chip';
+    return { resultsShown, nodes: Array.prototype.slice.call(host.querySelectorAll(sel)) };
+  }
+  function applySearchFocus() {
+    const { nodes } = searchFocusList();
+    const f = clamp(state.searchFocus || 0, 0, nodes.length);
+    state.searchFocus = f;
+    const box = el('search-box');
+    if (box) box.classList.toggle('sel', f === 0);
+    nodes.forEach((node, i) => node.classList.toggle('sel', i === f - 1));
+  }
+  function searchScroll(delta) {
+    const { nodes } = searchFocusList();
+    const before = clamp(state.searchFocus || 0, 0, nodes.length);
+    state.searchFocus = clamp(before + delta, 0, nodes.length);
+    if (state.searchFocus === before) return null;       // no movement
+    applySearchFocus();
+    const node = state.searchFocus === 0 ? el('search-box') : nodes[state.searchFocus - 1];
+    if (node && node.scrollIntoView) node.scrollIntoView({ block: 'nearest' });
+    return node;
+  }
+  function searchCenter() {
+    if (kbdOpen()) return;                               // keyboard taps handle themselves
+    const { resultsShown, nodes } = searchFocusList();
+    const f = state.searchFocus || 0;
+    if (f === 0) { openKeyboard(); return; }             // center on the box -> keyboard
+    const node = nodes[f - 1];
+    if (!node) return;
+    if (resultsShown) { activate('search', +node.dataset.idx); }
+    else {                                               // a RECENT chip
+      clearTimeout(searchTimer);
+      el('search-input').value = node.dataset.q;
+      runSearch(node.dataset.q);
+    }
+  }
+
+  // ---- the click-wheel keyboard (swapped in for the wheel while typing) ----
+  const KBD_ALPHA = [
+    ['q','w','e','r','t','y','u','i','o','p'],
+    ['a','s','d','f','g','h','j','k','l'],
+    ['z','x','c','v','b','n','m']
+  ];
+  const KBD_NUM = [
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['-','/',':',';','(',')','$','&','@'],
+    ['.',',','?','!','\'']
+  ];
+  let _kbdBuilt = false, _kbdNumeric = false;
+  function kbdOpen() { const k = el('keyboard'); return !!k && !k.hidden; }
+
+  function renderKbdRows() {
+    const rows = _kbdNumeric ? KBD_NUM : KBD_ALPHA;
+    const host = el('kbd-rows');
+    if (!host) return;
+    host.innerHTML = rows.map((row, ri) =>
+      '<div class="kbd-row">' +
+        row.map(ch => '<div class="kbd-key" data-ch="' + esc(ch) + '">' + esc(ch) + '</div>').join('') +
+        (ri === rows.length - 1 ? '<div class="kbd-key kbd-del" data-act="del" aria-label="Delete">&#9003;</div>' : '') +
+      '</div>'
+    ).join('');
+    const mode = el('keyboard').querySelector('.kbd-mode');
+    if (mode) mode.textContent = _kbdNumeric ? 'ABC' : '123';
+  }
+  function buildKeyboard() {
+    if (_kbdBuilt) return;
+    const k = el('keyboard');
+    if (!k) return;
+    k.innerHTML =
+      '<div class="kbd-rows" id="kbd-rows"></div>' +
+      '<div class="kbd-row kbd-bottom">' +
+        '<div class="kbd-key kbd-mode" data-act="mode">123</div>' +
+        '<div class="kbd-key kbd-space" data-act="space">space</div>' +
+        '<div class="kbd-key kbd-go" data-act="go">Search</div>' +
+        '<div class="kbd-key kbd-close" data-act="close" aria-label="Close keyboard">&#10005;</div>' +
+      '</div>';
+    renderKbdRows();
+    k.addEventListener('click', onKbdTap);
+    _kbdBuilt = true;
+  }
+  function onKbdTap(e) {
+    const key = e.target.closest('.kbd-key');
+    if (!key) return;
+    Feedback.press();
+    const act = key.dataset.act;
+    if (act === 'del')   return kbdDelete();
+    if (act === 'space') return kbdType(' ');
+    if (act === 'go')    return kbdGo();
+    if (act === 'close') return closeKeyboard();
+    if (act === 'mode')  { _kbdNumeric = !_kbdNumeric; renderKbdRows(); return; }
+    if (key.dataset.ch != null) kbdType(key.dataset.ch);
+  }
+  function kbdType(ch) { const i = el('search-input'); i.value += ch; afterType(); }
+  function kbdDelete() { const i = el('search-input'); i.value = i.value.slice(0, -1); afterType(); }
+  // Mirror the live-search behaviour of the real <input> "input" listener.
+  function afterType() {
+    clearTimeout(searchTimer);
+    const q = el('search-input').value;
+    if (!q.trim()) { showRecent(); renderChips(); state.searchFocus = 0; applySearchFocus(); return; }
+    searchTimer = setTimeout(() => runSearch(q), 350);
+  }
+  function kbdGo() {
+    const q = el('search-input').value.trim();
+    clearTimeout(searchTimer);
+    if (q) runSearch(q);
+    closeKeyboard();
+  }
+  function openKeyboard() {
+    buildKeyboard();
+    const wheel = el('wheel'), k = el('keyboard');
+    if (wheel) wheel.style.display = 'none';
+    if (k) k.hidden = false;
+    state.searchFocus = 0; applySearchFocus();
+    // focus shows a caret; inputmode=none keeps the native keyboard away on iOS.
+    try { el('search-input').focus({ preventScroll: true }); } catch (e) { try { el('search-input').focus(); } catch (_) {} }
+  }
+  function closeKeyboard() {
+    const wheel = el('wheel'), k = el('keyboard');
+    if (k) k.hidden = true;
+    if (wheel) wheel.style.display = '';
+    try { el('search-input').blur(); } catch (e) {}
   }
 
   // ===================================================================
@@ -665,7 +804,8 @@ const UI = (() => {
       return;
     }
     if (v === 'nowplaying') { Player.togglePlay(); return; }
-    if (['playlists', 'artists', 'albums', 'albumdetail', 'search'].indexOf(v) >= 0) {
+    if (v === 'search') { searchCenter(); return; }
+    if (['playlists', 'artists', 'albums', 'albumdetail'].indexOf(v) >= 0) {
       activate(v, state.sel[v] || 0);
     }
   }
@@ -690,7 +830,11 @@ const UI = (() => {
         changed = st.target !== before;
         if (changed) animateCoverFlow();   // glide + snap; no scale-pop (the slide is the feedback)
       }
-    } else if (['playlists', 'artists', 'albums', 'albumdetail', 'search'].indexOf(v) >= 0) {
+    } else if (v === 'search') {
+      if (kbdOpen()) return;            // typing: the wheel is hidden, ignore stray scrolls
+      node = searchScroll(delta);
+      changed = node != null;
+    } else if (['playlists', 'artists', 'albums', 'albumdetail'].indexOf(v) >= 0) {
       const rows = state.rows[v] || [];
       if (rows.length) {
         const before = state.sel[v] || 0;
@@ -723,11 +867,8 @@ const UI = (() => {
   // Scale the fixed-design screen (360x412) and wheel (236) to fill their
   // flex regions, so the whole UI fills any viewport top-to-bottom.
   function fitStage() {
-    const app = el('app');
-    // window.innerHeight is the only height that is correct in an iOS
-    // standalone PWA (height:100%/100vh under-report there). Force it, minus a
-    // small void so the metal iPod body reads as a device in space.
-    if (app) app.style.height = (window.innerHeight - 16) + 'px';
+    // #app is position:absolute inset:0, so it already fills the exact screen
+    // (no innerHeight juggling needed). We only scale the screen + wheel here.
     const screen = el('screen'), wheel = el('wheel');
     const sr = el('screen-region'), wr = el('wheel-region');
     if (sr && screen) {
@@ -824,7 +965,23 @@ const UI = (() => {
     el('list-artists').addEventListener('click', rowClick('artists'));
     el('grid-albums').addEventListener('click', rowClick('albums'));
     el('detail-tracks').addEventListener('click', rowClick('albumdetail'));
-    el('search-results').addEventListener('click', rowClick('search'));
+
+    // Search results use the dedicated focus model (0 = box, 1.. = rows).
+    el('search-results').addEventListener('click', (e) => {
+      const row = e.target.closest('[data-idx]');
+      if (!row) return;
+      Feedback.press();
+      const idx = +row.dataset.idx;
+      state.searchFocus = idx + 1;
+      applySearchFocus();
+      activate('search', idx);
+    });
+    // Tapping the search box opens the in-app keyboard (same as center on it).
+    el('search-box').addEventListener('click', () => {
+      Feedback.press();
+      state.searchFocus = 0; applySearchFocus();
+      openKeyboard();
+    });
 
     el('menu-sidebar').addEventListener('click', (e) => {
       const it = e.target.closest('.menu-item');
@@ -872,10 +1029,11 @@ const UI = (() => {
       const typing = document.activeElement === el('search-input');
       if (e.key === 'ArrowDown') { Feedback.resume(); onScroll(1); e.preventDefault(); }
       else if (e.key === 'ArrowUp') { Feedback.resume(); onScroll(-1); e.preventDefault(); }
-      else if (e.key === 'Enter') { if (!typing) { Feedback.press(); onCenter(); } }
+      else if (e.key === 'Enter') { Feedback.press(); if (typing) kbdGo(); else onCenter(); }
       else if (e.key === 'ArrowRight') { if (!typing) { Feedback.press(); Player.nextTrack(); } }
       else if (e.key === 'ArrowLeft') { if (!typing) { Feedback.press(); Player.previousTrack(); } }
-      else if (e.key === 'Escape' || (e.key === 'Backspace' && !typing)) { Feedback.press(); goMenu(); }
+      else if (e.key === 'Escape') { Feedback.press(); if (kbdOpen()) closeKeyboard(); else goMenu(); }
+      else if (e.key === 'Backspace' && !typing) { Feedback.press(); goMenu(); }
     });
   }
 
