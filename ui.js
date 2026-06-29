@@ -1089,6 +1089,26 @@ const UI = (() => {
     if (m) m.setAttribute('content', color);
   }
 
+  // Tap the bare metal body (not the screen or wheel) to toggle the iPod's
+  // finish between silver and full graphite. Persisted across launches.
+  const SILVER_BG = '#c6c9cf', GRAPHITE_BG = '#1c1d20';
+  function bodyIsGraphite() { return el('app').classList.contains('graphite'); }
+  function applyBodyTheme(graphite) {
+    el('app').classList.toggle('graphite', graphite);
+    if (!document.getElementById('signin') || document.getElementById('signin').style.display === 'none') {
+      setShellBg(graphite ? GRAPHITE_BG : SILVER_BG);  // keep the home-bar strip matched
+    }
+    try { localStorage.setItem('ultrapod_graphite', graphite ? '1' : '0'); } catch (e) {}
+  }
+  function bindBodyTap() {
+    el('app').addEventListener('click', (e) => {
+      // ignore taps on the screen, the wheel, or the sign-in overlay
+      if (e.target.closest('.screen') || e.target.closest('.wheel') || e.target.closest('#signin')) return;
+      Feedback.press();
+      applyBodyTheme(!bodyIsGraphite());
+    });
+  }
+
   function showSignIn(note) {
     setShellBg('#0a0a0c');
     let o = document.getElementById('signin');
@@ -1113,7 +1133,7 @@ const UI = (() => {
     o.style.display = 'flex';
   }
   function hideSignIn() {
-    setShellBg('#c6c9cf');     // back to the silver body tone for the home-bar strip
+    setShellBg(bodyIsGraphite() ? GRAPHITE_BG : SILVER_BG);   // match the home-bar strip to the finish
     const o = document.getElementById('signin');
     if (o) o.style.display = 'none';
   }
@@ -1126,6 +1146,9 @@ const UI = (() => {
     bindButtons();
     bindLists();
     bindKeys();
+    bindBodyTap();
+    // restore the saved silver/graphite finish
+    try { if (localStorage.getItem('ultrapod_graphite') === '1') applyBodyTheme(true); } catch (e) {}
     fitStage();
     window.addEventListener('resize', fitStage);
     window.addEventListener('orientationchange', fitStage);
