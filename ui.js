@@ -187,7 +187,7 @@ const UI = (() => {
       case 'artists':    loadArtists();   break;
       case 'albums':     loadAlbums();    break;
       case 'search':     enterSearch();   break;
-      case 'nowplaying': refreshNowPlaying(); break;
+      // nowplaying: startNpPoll() above already does the first refresh.
     }
   }
 
@@ -378,11 +378,15 @@ const UI = (() => {
     if (cur) {
       state.currentUri = cur.uri;
       state.np = { progress_ms: cur.progress_ms, duration_ms: cur.duration_ms, is_playing: cur.is_playing, baseTime: Date.now() };
-      el('np-title').textContent = cur.name;
-      el('np-artist').textContent = cur.artist || '';
-      setArt(el('np-art'), cur.image, cur.uri || cur.name, 'album');
-      el('np-dur').textContent = fmtTime(cur.duration_ms);
-      paintProgress();
+      // Only touch the Now Playing DOM if it's still the active view (a slow
+      // fetch can resolve after the user navigated away).
+      if (state.view === 'nowplaying') {
+        el('np-title').textContent = cur.name;
+        el('np-artist').textContent = cur.artist || '';
+        setArt(el('np-art'), cur.image, cur.uri || cur.name, 'album');
+        el('np-dur').textContent = fmtTime(cur.duration_ms);
+        paintProgress();
+      }
     } else if (state.view === 'nowplaying') {
       el('np-title').textContent = 'Nothing playing';
       el('np-artist').textContent = 'Open a playlist or album to start';
@@ -434,6 +438,7 @@ const UI = (() => {
   //  Search
   // ===================================================================
   let searchTimer = null;
+  let searchSeq = 0;            // guards against out-of-order search responses
 
   function enterSearch() {
     renderChips();
@@ -461,6 +466,7 @@ const UI = (() => {
   }
 
   async function runSearch(q) {
+    const myReq = ++searchSeq;
     el('search-recent').style.display = 'none';
     const cont = el('search-results');
     cont.style.display = 'block';
@@ -469,6 +475,7 @@ const UI = (() => {
     let res;
     try { res = await SpotifyAPI.search(q); }
     catch (e) { res = { tracks: [], albums: [], artists: [] }; }
+    if (myReq !== searchSeq) return;   // a newer search superseded this one
     addRecent(q);
 
     const flat = [];
@@ -636,18 +643,6 @@ const UI = (() => {
     }
   }
 
-  function startClock() {
-    const node = el('status-time');
-    if (!node) return;          // status bar removed in full-screen layout (OS shows the time)
-    const tick = () => {
-      const d = new Date();
-      node.textContent =
-        String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-    };
-    tick();
-    setInterval(tick, 15000);
-  }
-
   // smooth progress ticker
   function startTicker() {
     setInterval(() => { if (state.view === 'nowplaying') paintProgress(); }, 500);
@@ -657,9 +652,12 @@ const UI = (() => {
   function bindWheel() {
     const wheel = el('wheel');
     const STEP = 22;                       // degrees per scroll tick
-    const drag = { active: false, last: 0, acc: 0, rect: null };
+    const drag = { active: false, last: 0, acc: 0 };
 
-    const angleAt = (e, rect) => {
+    // Re-read the rect each event: the wheel is transform-scaled by fitStage,
+    // and an iOS URL-bar collapse mid-drag changes its on-screen center.
+    const angleAt = (e) => {
+      const rect = wheel.getBoundingClientRect();
       const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
       return Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
     };
@@ -667,13 +665,12 @@ const UI = (() => {
     wheel.addEventListener('pointerdown', (e) => {
       Feedback.resume();                   // unlock audio within the gesture
       drag.active = true; drag.acc = 0; wheelMoved = false;
-      drag.rect = wheel.getBoundingClientRect();
-      drag.last = angleAt(e, drag.rect);
+      drag.last = angleAt(e);
       try { wheel.setPointerCapture(e.pointerId); } catch (_) {}
     });
     wheel.addEventListener('pointermove', (e) => {
       if (!drag.active) return;
-      const a = angleAt(e, drag.rect);
+      const a = angleAt(e);
       let d = a - drag.last;
       if (d > 180) d -= 360; if (d < -180) d += 360;
       drag.acc += d; drag.last = a;
@@ -734,6 +731,7 @@ const UI = (() => {
     el('search-chips').addEventListener('click', (e) => {
       const c = e.target.closest('.chip');
       if (!c) return;
+      clearTimeout(searchTimer);           // cancel any pending debounced query
       el('search-input').value = c.dataset.q;
       runSearch(c.dataset.q);
     });
@@ -760,6 +758,36 @@ const UI = (() => {
   }
 
   // ===================================================================
+  //  Sign-in overlay (user-gesture login — reliable in iOS standalone PWAs)
+  // ===================================================================
+  function showSignIn(note) {
+    let o = document.getElementById('signin');
+    if (!o) {
+      o = document.createElement('div');
+      o.id = 'signin';
+      o.innerHTML =
+        '<div class="signin-card">' +
+          '<div class="signin-logo">UltraPod</div>' +
+          '<div class="signin-tag">your Spotify, iPod-style</div>' +
+          '<button class="signin-btn" id="signin-btn">Sign in with Spotify</button>' +
+          '<div class="signin-note" id="signin-note"></div>' +
+        '</div>';
+      (document.getElementById('scaler') || document.body).appendChild(o);
+      document.getElementById('signin-btn').addEventListener('click', () => {
+        Feedback.press();
+        document.getElementById('signin-note').textContent = 'Opening Spotify…';
+        Auth.login();
+      });
+    }
+    document.getElementById('signin-note').textContent = note || '';
+    o.style.display = 'flex';
+  }
+  function hideSignIn() {
+    const o = document.getElementById('signin');
+    if (o) o.style.display = 'none';
+  }
+
+  // ===================================================================
   //  Boot
   // ===================================================================
   async function init() {
@@ -778,14 +806,11 @@ const UI = (() => {
     setTimeout(fitStage, 150);
     setTimeout(fitStage, 500);
     setTimeout(fitStage, 1200);
-    startClock();
     startTicker();
 
     // The menu view + Playlists highlight are present in the static HTML, so
-    // the iPod paints fully on first frame with no async/network dependency.
-    // We only re-assert the highlight here; we must NOT call go('menu') yet —
-    // go() loads live data via getToken(), which on a ?code= callback would
-    // redirect before Auth.init() can exchange the code (a login loop).
+    // the iPod paints on first frame. We only re-assert the highlight here; we
+    // must NOT call go('menu') until authenticated (go() loads data via getToken).
     setMi(3);
 
     if (CONFIG.CLIENT_ID === 'YOUR_CLIENT_ID_HERE' || CONFIG.REDIRECT_URI === 'YOUR_REDIRECT_URI_HERE') {
@@ -793,30 +818,32 @@ const UI = (() => {
       return;
     }
 
-    // PKCE needs Web Crypto, which only exists in a secure context. Fail with
-    // an actionable message instead of an opaque TypeError from crypto.subtle.
+    // PKCE needs Web Crypto, which only exists in a secure context.
     if (!window.isSecureContext || !window.crypto || !crypto.subtle) {
       toast('Open over https or http://127.0.0.1 to sign in');
       return;
     }
 
+    let ok = false;
     try {
-      const ok = await Auth.init();
-      if (!ok) return;                  // redirecting to Spotify
+      ok = await Auth.init();
     } catch (e) {
       console.warn(e);
       const m = (e && e.message) || '';
-      toast(
-        /STORAGE_BLOCKED/.test(m) ? 'Storage blocked — exit Private mode / enable cookies'
-        : /Token exchange failed|state mismatch/i.test(m) ? m   // show the real cause
-        : 'Sign-in required'
+      showSignIn(
+        /STORAGE_BLOCKED/.test(m) ? 'Storage blocked — turn off Private Browsing / allow site data, then tap to retry.'
+        : /Token exchange failed|state mismatch|verifier/i.test(m) ? 'Sign-in didn’t complete — tap to try again.'
+        : 'Tap to sign in.'
       );
       return;
     }
+    // Not signed in: show a tappable Sign-in button. A user-gesture redirect is
+    // far more reliable than a silent cold-launch redirect inside an iOS
+    // standalone PWA (which otherwise breaks out to Safari and can loop).
+    if (!ok) { showSignIn(); return; }
 
-    // Authenticated: connect the Web Playback SDK (only now, so it can never
-    // force a login redirect before we're configured), activate the menu for
-    // real, and load live cover-flow data.
+    // Authenticated: hide sign-in, connect the SDK, load live data.
+    hideSignIn();
     Player.start();
     setMi(3);
     go('menu');
@@ -828,5 +855,10 @@ const UI = (() => {
     init();
   }
 
-  return { goMenu, onCenter, onScroll, toast, onPlayerState };
+  // Export on window: the cross-module calls in player.js / spotify.js /
+  // auth.js are written as `if (window.UI && UI.x)`, and a top-level `const`
+  // is NOT a property of the global object in a classic script — so without
+  // this, every guarded toast and the SDK's onPlayerState push silently no-op.
+  window.UI = { goMenu, onCenter, onScroll, toast, onPlayerState, showSignIn, hideSignIn };
+  return window.UI;
 })();

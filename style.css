@@ -1,9 +1,9 @@
 /* ============================================================
    UltraPod — style.css
-   All styles extracted from the reference UI (UltraPod App).
-   The design canvas is a fixed 720 x 1100 stage that ui.js scales
-   to fit the viewport. Every value below is taken verbatim from the
-   reference's inline styles.
+   View styling extracted from the reference UI (UltraPod App).
+   Fluid full-screen layout: a fixed 360x412 .screen (display) and a fixed
+   236px .wheel, each transform-scaled by ui.js fitStage() to fill its flex
+   region inside #app (height = window.innerHeight). No device-mockup frame.
    ============================================================ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
@@ -222,6 +222,26 @@ body {
 /* snappy highlight transitions so scrolling feels immediate */
 .list-row, .result-row, .track-row { transition: background-color 0.08s ease; }
 .album-art { transition: box-shadow 0.1s ease; }
+
+/* ---- sign-in overlay (user-gesture login) -------------------------- */
+#signin {
+  position: absolute; inset: 0; z-index: 200; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 38%, #16181b, #0a0a0c 72%);
+  padding: env(safe-area-inset-top, 0px) 24px env(safe-area-inset-bottom, 0px);
+}
+.signin-card { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 320px; }
+.signin-logo { font-size: 30px; font-weight: 800; color: #fff; }
+.signin-tag { margin-top: 6px; font-size: 13px; color: #8b8b92; }
+.signin-btn {
+  margin-top: 30px; padding: 14px 30px; border: none; border-radius: 26px;
+  background: linear-gradient(118deg,#1ed760,#1db954); color: #04130a;
+  font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
+  box-shadow: 0 10px 26px rgba(29,185,84,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+  -webkit-tap-highlight-color: transparent;
+}
+.signin-btn:active { transform: translateY(1px); }
+.signin-note { margin-top: 16px; font-size: 12px; color: #8b8b92; min-height: 16px; line-height: 1.4; }
 
 /* ---- toast overlay (errors / premium notice) ----------------------- */
 .toast {

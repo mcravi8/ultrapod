@@ -19,6 +19,16 @@ const Player = (() => {
   let _paused = true;       // tracked from player_state_changed for fallback toggle
   let _sdkLoaded = false;   // SDK script finished loading
   let _started = false;     // ui.js authorised us to connect
+  let _transferred = false; // playback transferred to this device once (non-iOS)
+
+  // The Web Playback SDK registers as a Spotify Connect device on iOS but
+  // cannot stream audio there. Detect iOS (incl. iPadOS reporting a Mac UA) so
+  // we DON'T trust it as the active device — instead we fall through to Web-API
+  // control of the user's real active device.
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    (/Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
 
   // Build + connect the player. Safe to call once; guarded by _player.
   function build() {
@@ -36,11 +46,19 @@ const Player = (() => {
     // ---- ready / not-ready --------------------------------------------
     _player.addListener('ready', ({ device_id }) => {
       _deviceId = device_id;
+      if (isIOS) {
+        // Don't mark ready and don't transfer/register: leaving
+        // SpotifyAPI._deviceId null makes play()/resume()/pause()/next()/
+        // previous() act on the user's CURRENT active Spotify device — the
+        // intended iOS fallback (the SDK can't stream audio here anyway).
+        return;
+      }
       _ready = true;
-      // Register the device with the API module and make this browser
-      // the active playback device.
       SpotifyAPI.setDeviceId(device_id);
-      SpotifyAPI.transferPlayback(device_id, false);
+      // Activate this device once; never yank playback back on later reconnects.
+      if (!_transferred) {
+        SpotifyAPI.transferPlayback(device_id, false).then(okk => { if (okk) _transferred = true; }).catch(() => {});
+      }
     });
 
     _player.addListener('not_ready', ({ device_id }) => {
@@ -101,8 +119,6 @@ const Player = (() => {
     else fallbackToggle();
   }
   function fallbackToggle() { return _paused ? SpotifyAPI.resume() : SpotifyAPI.pause(); }
-  function getDeviceId()   { return _deviceId; }
-  function isReady()       { return _ready; }
 
-  return { start, previousTrack, nextTrack, togglePlay, getDeviceId, isReady };
+  return { start, previousTrack, nextTrack, togglePlay };
 })();

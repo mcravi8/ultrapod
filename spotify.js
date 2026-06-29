@@ -14,13 +14,19 @@ const SpotifyAPI = (() => {
   // Set by player.js once the Web Playback SDK reports a device id.
   let _deviceId = null;
   function setDeviceId(id) { _deviceId = id; }
-  function getDeviceId() { return _deviceId; }
 
   // ---- core fetch with auth + 401 retry ------------------------------
   async function api(path, { method = 'GET', body, retry = true } = {}) {
     let token;
-    try { token = await Auth.getToken(); }
-    catch (e) { throw e; }                 // getToken may redirect to login
+    try {
+      token = await Auth.getToken();
+    } catch (e) {
+      // getToken() already redirects (throwing 'Redirecting…') when there is no
+      // refresh token. If it threw for ANY other reason — e.g. a refresh that
+      // failed and cleared the tokens — no redirect happened, so start one here.
+      if (!/Redirecting/.test((e && e.message) || '')) Auth.login();
+      throw e;
+    }
 
     const opts = {
       method,
@@ -140,24 +146,6 @@ const SpotifyAPI = (() => {
     }));
   }
 
-  // GET /v1/playlists/{id}/tracks -> tracklist (used by album-detail view)
-  async function getPlaylistTracks(playlistId) {
-    const data = await getJSON('/playlists/' + playlistId +
-      '/tracks?limit=50&fields=items(track(name,duration_ms,uri,track_number,artists(name)))');
-    if (!data || !data.items) return [];
-    return data.items
-      .map(it => it.track)
-      .filter(Boolean)
-      .map((t, i) => ({
-        name: t.name,
-        duration_ms: t.duration_ms,
-        track_number: i + 1,
-        artist: (t.artists || []).map(a => a.name).join(', '),
-        uri: t.uri,
-        type: 'track'
-      }));
-  }
-
   // GET /v1/me/tracks -> Liked Songs (used for "All Music")
   async function getSavedTracks() {
     const data = await getJSON('/me/tracks?limit=50');
@@ -263,9 +251,15 @@ const SpotifyAPI = (() => {
       return play(payload, false);
     }
 
-    // 403 (often restriction / non-premium) or 404 with no device.
-    if (res.status === 403 || res.status === 404) {
+    // 403 is the real non-premium / restriction signal.
+    if (res.status === 403) {
       if (window.UI && UI.toast) UI.toast('Premium required for playback');
+      return false;
+    }
+    // 404 here means no active device (the SDK-device retry above didn't apply,
+    // e.g. iOS Safari where the SDK can't stream). Don't blame Premium.
+    if (res.status === 404) {
+      if (window.UI && UI.toast) UI.toast('Open Spotify on a device, then try again');
       return false;
     }
 
@@ -318,9 +312,9 @@ const SpotifyAPI = (() => {
   }
 
   return {
-    setDeviceId, getDeviceId,
+    setDeviceId,
     getPlaylists, getFollowedArtists, getSavedAlbums, getAlbumTracks,
-    getPlaylistTracks, getSavedTracks, getRecentlyPlayed,
+    getSavedTracks, getRecentlyPlayed,
     getCurrentlyPlaying, search,
     playContext, playTracks, transferPlayback,
     resume, pause, next, previous

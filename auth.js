@@ -29,12 +29,23 @@ const Auth = (() => {
   function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
   function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
-  // sessionStorage (per-tab) used only as a redirect-loop breaker.
+  // Redirect-loop breaker. Stored in localStorage (NOT sessionStorage), because
+  // an iOS standalone PWA starts a fresh sessionStorage on every Home-Screen
+  // relaunch, which would reset the counter and defeat the guard. Time-windowed
+  // so a stale guard auto-clears instead of permanently locking sign-in.
   const ATTEMPTS = 'spotify_login_attempts';
-  const MAX_ATTEMPTS = 3;
-  function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
-  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
-  function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+  const MAX_ATTEMPTS = 4;
+  const ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
+  function getAttempts() {
+    try {
+      const raw = lsGet(ATTEMPTS); if (!raw) return 0;
+      const o = JSON.parse(raw);
+      if (!o || (Date.now() - (o.at || 0)) > ATTEMPT_WINDOW_MS) { lsDel(ATTEMPTS); return 0; }
+      return o.n || 0;
+    } catch (e) { return 0; }
+  }
+  function bumpAttempts() { lsSet(ATTEMPTS, JSON.stringify({ n: getAttempts() + 1, at: Date.now() })); }
+  function resetAttempts() { lsDel(ATTEMPTS); }
 
   // ---- PKCE helpers --------------------------------------------------
   function randomString(len) {
@@ -67,7 +78,7 @@ const Auth = (() => {
     // If we received a token but couldn't persist it, surface a clear error
     // rather than silently looping the login redirect on the next call.
     if (data.access_token && !ok) throw new Error('STORAGE_BLOCKED');
-    if (data.access_token && ok) ssDel(ATTEMPTS);   // auth succeeded -> reset loop guard
+    if (data.access_token && ok) resetAttempts();   // auth succeeded -> reset loop guard
   }
 
   function clearTokens() {
@@ -101,16 +112,15 @@ const Auth = (() => {
       return;
     }
 
-    // Loop breaker: if we've already bounced to Spotify several times this tab
-    // session without succeeding, stop instead of redirecting again.
-    const n = parseInt(ssGet(ATTEMPTS) || '0', 10) || 0;
-    if (n >= MAX_ATTEMPTS) {
+    // Loop breaker: if we've bounced to Spotify several times recently without
+    // succeeding, stop instead of redirecting again.
+    if (getAttempts() >= MAX_ATTEMPTS) {
       if (window.UI && UI.toast) {
-        UI.toast('Sign-in keeps failing. Check the Redirect URI matches config.js exactly, then reopen in a new tab.');
+        UI.toast('Sign-in keeps failing. Check the Redirect URI in your Spotify app matches exactly, then try again.');
       }
       return;
     }
-    ssSet(ATTEMPTS, String(n + 1));
+    bumpAttempts();
 
     const verifier  = randomString(64);
     const challenge = base64url(await sha256(verifier));
@@ -215,7 +225,9 @@ const Auth = (() => {
     const error = url.searchParams.get('error');
 
     if (error) {
-      // User denied or config error — wipe params and surface it.
+      // User denied or recoverable error. Reaching our registered redirect_uri
+      // proves the URI is valid, so clear the loop guard.
+      resetAttempts();
       lsDel(LS.state);
       cleanUrl();
       throw new Error('Spotify auth error: ' + error);
@@ -226,8 +238,10 @@ const Auth = (() => {
       const expectedState = lsGet(LS.state);
       lsDel(LS.state);                                   // single-use
       // Strip the one-time ?code= up front so it can never be replayed on a
-      // reload (auth codes are single-use).
+      // reload (auth codes are single-use). A valid round-trip with a code
+      // proves the redirect URI works -> clear the loop guard.
       cleanUrl();
+      resetAttempts();
       if (!expectedState || returnedState !== expectedState) {
         throw new Error('Auth state mismatch — please sign in again');
       }
@@ -242,11 +256,12 @@ const Auth = (() => {
     if (!isExpired()) return true;
     if (lsGet(LS.refresh)) {
       try { await refresh(); return true; }
-      catch (e) { /* fall through to login */ }
+      catch (e) { /* fall through */ }
     }
 
-    // Nothing usable — start the PKCE flow.
-    await login();
+    // Nothing usable — do NOT auto-redirect (a silent cold-launch redirect
+    // breaks out of an iOS standalone PWA and loops). ui.js shows a tappable
+    // "Sign in with Spotify" button that calls login() on a user gesture.
     return false;
   }
 
