@@ -263,7 +263,8 @@ body {
 .wheel-menu { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: rgba(255,255,255,0.62); }
 .wheel-next { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
 .wheel-prev { position: absolute; top: 50%; left: 14px; transform: translateY(-50%); padding: 10px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.55); }
-.wheel-play { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,0.55); }
+.wheel-play { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 14px; cursor: pointer; font-size: 12px; letter-spacing: 1px; color: rgba(255,255,255,0.55); line-height: 0; }
+.wheel-play svg { display: block; }
 .wheel-center { width: 86px; height: 86px; border-radius: 50%; cursor: pointer; background: radial-gradient(circle at 50% 66%, #2b2b2f 0%, #161619 58%, #0b0b0d 100%); box-shadow: inset 0 7px 12px rgba(0,0,0,0.78), inset 0 -4px 6px rgba(255,255,255,0.07), inset 0 0 0 1px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06); }
 
 /* ---- click-wheel tactile feedback + selection "tick" pulse --------- */

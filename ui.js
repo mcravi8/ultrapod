@@ -1117,7 +1117,7 @@ const UI = (() => {
       o.id = 'signin';
       o.innerHTML =
         '<div class="signin-card">' +
-          '<div class="signin-logo">UltraPod</div>' +
+          '<div class="signin-logo">iPod</div>' +
           '<div class="signin-tag">your Spotify, iPod-style</div>' +
           '<button class="signin-btn" id="signin-btn">Sign in with Spotify</button>' +
           '<div class="signin-note" id="signin-note"></div>' +

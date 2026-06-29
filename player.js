@@ -35,7 +35,7 @@ const Player = (() => {
     if (_player || typeof Spotify === 'undefined' || !Spotify.Player) return;
 
     _player = new Spotify.Player({
-      name: 'UltraPod',
+      name: 'iPod',
       // On token failure hand the SDK an empty token so it raises
       // authentication_error immediately (handled below) instead of stalling
       // until its internal timeout.
