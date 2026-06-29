@@ -409,6 +409,7 @@ const UI = (() => {
   //  Album / tracklist detail
   // ===================================================================
   async function openAlbumDetail(album) {
+    state.detailAlbum = album;            // reused for optimistic Now Playing art/artist
     setArt(el('detail-art'), album.image, album.id || album.name, 'album');
     el('detail-title').textContent = album.name;
     el('detail-sub').textContent = album.artist + (album.year ? ' · ' + album.year : '');
@@ -424,6 +425,7 @@ const UI = (() => {
   }
 
   async function openAllMusic() {
+    state.detailAlbum = null;             // Liked Songs: per-track art/artist comes from the rows
     setArtGradient(el('detail-art'), LIKED_GRAD);
     el('detail-title').textContent = 'All Music';
     el('detail-sub').textContent = 'Liked Songs';
@@ -471,7 +473,16 @@ const UI = (() => {
   async function refreshNowPlaying() {
     let cur = null;
     try { cur = await SpotifyAPI.getCurrentlyPlaying(); } catch (e) {}
+    // After the user picks a song we optimistically paint it (showNowPlaying-
+    // Optimistic); during that window we ignore a null / still-the-old-track
+    // poll so the chosen song stays on screen until Spotify catches up.
+    const optimistic = Date.now() < (state.npOptimisticUntil || 0);
     if (cur) {
+      if (optimistic && cur.uri && state.currentUri && cur.uri !== state.currentUri) {
+        if (state.view === 'albumdetail') renderTracks();
+        return;                                   // stale "previous track" — wait for the new one
+      }
+      state.npOptimisticUntil = 0;                // real data for the new track arrived
       state.currentUri = cur.uri;
       state.np = { progress_ms: cur.progress_ms, duration_ms: cur.duration_ms, is_playing: cur.is_playing, baseTime: Date.now() };
       // Only touch the Now Playing DOM if it's still the active view (a slow
@@ -483,7 +494,7 @@ const UI = (() => {
         el('np-dur').textContent = fmtTime(cur.duration_ms);
         paintProgress();
       }
-    } else if (state.view === 'nowplaying') {
+    } else if (state.view === 'nowplaying' && !optimistic) {
       el('np-title').textContent = 'Nothing playing';
       el('np-artist').textContent = 'Open a playlist or album to start';
       setArtGradient(el('np-art'), GRADS[0]);
@@ -493,6 +504,24 @@ const UI = (() => {
       el('np-knob').style.left = '0%';
     }
     if (state.view === 'albumdetail') renderTracks();
+  }
+
+  // Paint Now Playing immediately from known metadata when the user picks a
+  // song, so it shows that track at once instead of "Nothing playing" until the
+  // poll catches up. refreshNowPlaying() reconciles once Spotify reports it.
+  function showNowPlayingOptimistic(meta) {
+    if (!meta) return;
+    if (meta.uri) state.currentUri = meta.uri;
+    state.np = { progress_ms: 0, duration_ms: meta.duration_ms || 0, is_playing: true, baseTime: Date.now() };
+    state.npOptimisticUntil = Date.now() + 5000;
+    el('np-title').textContent = meta.name || '—';
+    el('np-artist').textContent = meta.artist || '';
+    if (meta.image) setArt(el('np-art'), meta.image, meta.uri || meta.name, 'album');
+    else setArtGradient(el('np-art'), gradientFor(meta.uri || meta.name || 'np', 'album'));
+    el('np-cur').textContent = '0:00';
+    el('np-dur').textContent = fmtTime(meta.duration_ms || 0);
+    el('np-fill').style.width = '0%';
+    el('np-knob').style.left = '0%';
   }
 
   function paintProgress() {
@@ -780,12 +809,20 @@ const UI = (() => {
     const rows = state.rows[view] || [];
     const item = rows[idx];
     if (!item) return;
+    const al = state.detailAlbum;
     if (view === 'playlists')      { SpotifyAPI.playContext(item.uri).catch(noop); go('nowplaying'); }
     else if (view === 'artists')   { SpotifyAPI.playContext(item.uri).catch(noop); go('nowplaying'); }
     else if (view === 'albums')    { openAlbumDetail(item); }
-    else if (view === 'albumdetail') { SpotifyAPI.playTracks(state.detailUris, idx).catch(noop); go('nowplaying'); }
+    else if (view === 'albumdetail') {
+      SpotifyAPI.playTracks(state.detailUris, idx).catch(noop);
+      go('nowplaying');
+      showNowPlayingOptimistic({
+        name: item.name, uri: item.uri, duration_ms: item.duration_ms,
+        artist: item.artist || (al && al.artist), image: item.image || (al && al.image)
+      });
+    }
     else if (view === 'search') {
-      if (item.type === 'track')      { SpotifyAPI.playTracks([item.uri], 0).catch(noop); go('nowplaying'); }
+      if (item.type === 'track')      { SpotifyAPI.playTracks([item.uri], 0).catch(noop); go('nowplaying'); showNowPlayingOptimistic(item); }
       else if (item.type === 'album') { openAlbumDetail(item); }
       else if (item.type === 'artist') { SpotifyAPI.playContext(item.uri).catch(noop); go('nowplaying'); }
     }

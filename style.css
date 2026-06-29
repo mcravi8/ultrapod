@@ -273,9 +273,22 @@ body {
    ON-SCREEN KEYBOARD (replaces the wheel while typing a search)
    Same graphite/inset aesthetic as the click wheel; fills #wheel-region.
    ============================================================ */
-#keyboard { width: 100%; max-width: 360px; padding: 0 4px; flex-direction: column; gap: 7px; }
-#keyboard[hidden] { display: none; }
-#keyboard:not([hidden]) { display: flex; }
+/* The keyboard overlays the wheel region (absolute) so it can crossfade with
+   the wheel without disturbing the wheel's centering. Closed = scaled-down +
+   faded + click-through; .kbd-open morphs it up with a slight overshoot. */
+#keyboard {
+  position: absolute; inset: 0; z-index: 4;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transform: scale(0.78); transform-origin: 50% 45%;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.26s cubic-bezier(0.2, 0.9, 0.25, 1.25);
+}
+#keyboard.kbd-open { opacity: 1; transform: scale(1); pointer-events: auto; }
+.kbd-panel { width: 100%; max-width: 360px; padding: 0 8px; display: flex; flex-direction: column; gap: 7px; }
+/* the wheel fades out beneath the keyboard. Its transform is owned by fitStage,
+   so only opacity is transitioned here -- never transform -- to avoid a jump. */
+.wheel { transition: opacity 0.16s ease; }
+.wheel.kbd-hidden { opacity: 0; pointer-events: none; }
 .kbd-rows { display: flex; flex-direction: column; gap: 6px; }
 .kbd-row { display: flex; gap: 5px; justify-content: center; }
 .kbd-key {
