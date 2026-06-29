@@ -1406,12 +1406,27 @@ const UI = (() => {
   // ===================================================================
   //  Boot
   // ===================================================================
+  // Best-effort portrait lock. Works on Android / installed PWAs that allow
+  // screen.orientation.lock; iOS Safari has no such API (it throws / is
+  // undefined), so the manifest "orientation":"portrait" and the CSS
+  // #rotate-guard overlay cover that case. Always wrapped so it never throws.
+  function lockPortrait() {
+    try {
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        const p = screen.orientation.lock('portrait');
+        if (p && p.catch) p.catch(() => {});
+      }
+    } catch (e) {}
+  }
+
   async function init() {
     bindWheel();
     bindButtons();
     bindLists();
     bindKeys();
     bindBodyTap();
+    lockPortrait();
+    window.addEventListener('orientationchange', lockPortrait);
     // restore the saved silver/graphite finish
     try { if (localStorage.getItem('ultrapod_graphite') === '1') applyBodyTheme(true); } catch (e) {}
     fitStage();

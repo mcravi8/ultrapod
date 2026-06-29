@@ -382,3 +382,23 @@ body {
   z-index: 100; opacity: 0; transition: opacity 0.25s ease; pointer-events: none;
 }
 .toast.show { opacity: 1; }
+
+/* ============================================================
+   PORTRAIT-ONLY GUARD
+   UltraPod is a vertical iPod. The manifest ("orientation":"portrait") + the
+   JS screen.orientation.lock() keep installed/Android PWAs upright. This
+   overlay is the iOS-Safari fallback: shown ONLY on touch devices (hover:none
+   + pointer:coarse) held in landscape, so desktop browsers are never affected.
+   ============================================================ */
+#rotate-guard { display: none; }
+@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  #rotate-guard {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; text-align: center; padding: 24px;
+    background: #0a0a0c; color: #e8e8ec;
+  }
+  #rotate-guard svg { color: #1ed760; }
+  #rotate-guard .rotate-msg { font-size: 18px; font-weight: 700; }
+  #rotate-guard .rotate-sub { font-size: 13px; color: #8b8b92; }
+}

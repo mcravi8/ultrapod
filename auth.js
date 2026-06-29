@@ -19,7 +19,8 @@ const Auth = (() => {
     refresh:  'spotify_refresh_token',
     expires:  'spotify_expires_at',     // ms epoch
     verifier: 'spotify_code_verifier',
-    state:    'spotify_auth_state'
+    state:    'spotify_auth_state',
+    scope:    'spotify_granted_scopes'  // scopes the stored token was actually granted
   };
 
   // ---- defensive localStorage (Private mode / blocked storage) -------
@@ -75,6 +76,9 @@ const Auth = (() => {
     // Spotify omits refresh_token on some refreshes — keep the existing one.
     if (data.refresh_token) lsSet(LS.refresh, data.refresh_token);
     if (data.expires_in) lsSet(LS.expires, String(Date.now() + data.expires_in * 1000));
+    // Spotify returns the granted scopes on both code-exchange and refresh; keep
+    // them so we can detect when CONFIG.SCOPES later outgrows the stored token.
+    if (data.scope) lsSet(LS.scope, data.scope);
     // If we received a token but couldn't persist it, surface a clear error
     // rather than silently looping the login redirect on the next call.
     if (data.access_token && !ok) throw new Error('STORAGE_BLOCKED');
@@ -85,6 +89,19 @@ const Auth = (() => {
     lsDel(LS.access);
     lsDel(LS.refresh);
     lsDel(LS.expires);
+    lsDel(LS.scope);
+  }
+
+  // The stored token is bound to whatever scopes were granted when it was minted.
+  // If CONFIG.SCOPES later grows (a feature needs a new scope), a refreshed token
+  // still carries the OLD scopes -> 403 / SDK "Invalid token scopes". Detect that
+  // so init() can force a fresh consent instead of silently refreshing forever.
+  function scopesSatisfied() {
+    const granted = (lsGet(LS.scope) || '').split(/\s+/).filter(Boolean);
+    if (!granted.length) return false;                 // unknown grant -> re-consent to be safe
+    const have = {};
+    granted.forEach(s => { have[s] = true; });
+    return CONFIG.SCOPES.split(/\s+/).filter(Boolean).every(s => have[s]);
   }
 
   function isExpired() {
@@ -253,10 +270,15 @@ const Auth = (() => {
     }
 
     // Have a usable (or refreshable) token?
-    if (!isExpired()) return true;
+    if (!isExpired()) {
+      if (!scopesSatisfied()) { clearTokens(); return false; }   // scope drift -> show sign-in for fresh consent
+      return true;
+    }
     if (lsGet(LS.refresh)) {
-      try { await refresh(); return true; }
-      catch (e) { /* fall through */ }
+      try { await refresh(); }
+      catch (e) { return false; }
+      if (!scopesSatisfied()) { clearTokens(); return false; }   // refreshed token still too narrow
+      return true;
     }
 
     // Nothing usable — do NOT auto-redirect (a silent cold-launch redirect
