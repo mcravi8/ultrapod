@@ -619,7 +619,11 @@ const UI = (() => {
   // ===================================================================
   function fitStage() {
     const stage = el('stage');
-    const s = Math.min(window.innerWidth / 720, window.innerHeight / 1100);
+    // Scale so the iPod itself (centered in the 720x1100 stage) fills the
+    // screen, rather than fitting the whole mockup "desk" with big margins.
+    // The padding leaves a little breathing room and clears the notch / home bar.
+    const IPOD_W = 384 + 14, IPOD_H = 808 + 30;
+    const s = Math.min(window.innerWidth / IPOD_W, window.innerHeight / IPOD_H);
     stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
   }
 
