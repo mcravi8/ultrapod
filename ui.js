@@ -153,19 +153,28 @@ const UI = (() => {
     }
 
     function blip(freq, peak, dur, type) {
-      const c = ctx; if (!c) return;
-      if (c.state !== 'running') { try { c.resume(); } catch (e) {} }
-      const t = c.currentTime;
-      const osc = c.createOscillator();
-      const gain = c.createGain();
-      osc.type = type || 'square';
-      osc.frequency.setValueAtTime(freq, t);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peak, t + 0.0012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      osc.connect(gain).connect(c.destination);
-      osc.start(t);
-      osc.stop(t + dur + 0.01);
+      const c = resume();
+      if (!c) return;
+      const fire = () => {
+        const t = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = type || 'square';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(peak, t + 0.0012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain).connect(c.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.01);
+      };
+      // A blip scheduled while the context is still 'suspended' is LOST: the
+      // clock is frozen at t, so by the time the async resume() lands the play
+      // window is already in the past. That's the real "no click until music
+      // plays" bug. Schedule only once the context is genuinely running — for
+      // the first click that means firing on the resume() promise.
+      if (c.state === 'running') fire();
+      else { try { c.resume().then(fire).catch(() => {}); } catch (e) {} }
     }
 
     // --- physical haptics ----------------------------------------------
