@@ -120,12 +120,25 @@ body {
 /* ============================================================
    COVER FLOW VIEW (full)
    ============================================================ */
-.cf { position: absolute; left: 0; right: 0; top: 64px; height: 210px; perspective: 900px; }
-.cf-side { position: absolute; top: 50%; width: 120px; height: 120px; z-index: 1; border-radius: 6px; overflow: hidden; box-shadow: 0 18px 30px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.08); }
-.cf-left  { left: 78px;  transform: translate(-50%,-50%) rotateY(52deg)  scale(0.9); filter: brightness(0.62); }
-.cf-right { left: 258px; transform: translate(-50%,-50%) rotateY(-52deg) scale(0.9); filter: brightness(0.66); }
-.cf-center { position: absolute; top: 50%; left: 168px; transform: translate(-50%,-50%); z-index: 3; }
-.cf-center-art { position: relative; width: 150px; height: 150px; border-radius: 8px; overflow: hidden; box-shadow: 0 26px 40px -8px rgba(0,0,0,0.78), inset 0 0 0 1px rgba(255,255,255,0.12); }
+/* real 3D Cover Flow: a perspective stage of cards positioned by ui.js. */
+.cf-stage {
+  position: absolute; left: 0; right: 0; top: 24px; height: 270px;
+  perspective: 860px; perspective-origin: 50% 42%;
+  transform-style: preserve-3d;
+  background: radial-gradient(ellipse at 50% 38%, rgba(255,255,255,0.05), transparent 60%);
+}
+.cf-cover {
+  position: absolute; left: 50%; top: 132px;       /* cards are centred here, then transformed */
+  width: 132px; height: 132px;
+  transform-style: preserve-3d; will-change: transform, opacity, filter;
+  cursor: pointer;
+}
+.cf-cover-art {
+  width: 100%; height: 100%; border-radius: 6px; overflow: hidden;
+  box-shadow: 0 22px 30px -8px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(255,255,255,0.12);
+  /* glossy reflected floor */
+  -webkit-box-reflect: below 2px linear-gradient(to bottom, transparent 56%, rgba(255,255,255,0.22));
+}
 .cf-label { position: absolute; top: 300px; left: 0; right: 0; text-align: center; padding: 0 20px; }
 .cf-title { font-size: 16px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cf-sub   { margin-top: 4px; font-size: 11.5px; color: #8b8b92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -18,7 +18,7 @@ const UI = (() => {
     sel: {},                // per-view selection index
     rows: {},               // per-view item arrays (for wheel/center/click)
     coverflow: null,        // recently-played items
-    coverIndex: 0,
+    cf: { pos: 0, target: 0, raf: null },   // Cover Flow scroll position
     playlists: null,
     artists: null,
     albums: null,
@@ -217,31 +217,97 @@ const UI = (() => {
   // ===================================================================
   //  Cover flow (menu mini + full)
   // ===================================================================
+  function cfState() { return state.cf || (state.cf = { pos: 0, target: 0, raf: null }); }
+
   async function loadCoverflow() {
     if (!state.coverflow) {
       try { state.coverflow = await SpotifyAPI.getRecentlyPlayed(); }
       catch (e) { state.coverflow = []; }
-      state.coverIndex = 0;
+      state.cf = { pos: 0, target: 0, raf: null };
     }
-    renderCoverflow();
+    renderMenuCoverflow();
+    if (state.view === 'coverflow') {
+      buildCoverFlow();
+      positionCovers(cfState().pos);
+      updateCfLabel();
+    }
   }
 
-  function renderCoverflow() {
+  // The menu sidebar's small static preview (3 most-recent covers).
+  function renderMenuCoverflow() {
     const items = state.coverflow || [];
-    const i = clamp(state.coverIndex, 0, Math.max(0, items.length - 1));
-    const center = items[i], left = items[i - 1], right = items[i + 1];
+    const c = items[0], l = items[1], r = items[2];
+    setArt(el('menu-cf-center'), c && c.image, c ? c.albumId : 'c', 'album');
+    setArt(el('menu-cf-left'),   l && l.image, l ? l.albumId : 'l', 'album');
+    setArt(el('menu-cf-right'),  r && r.image, r ? r.albumId : 'r', 'album');
+    el('menu-cf-title').textContent = c ? c.title : 'No recent plays';
+    el('menu-cf-sub').textContent = c ? (c.artist + ' · ' + items.length + ' recent') : 'Spotify';
+  }
 
-    const paint = (centerId, leftId, rightId, titleId, subId) => {
-      setArt(el(centerId), center && center.image, center ? center.albumId : 'c', 'album');
-      setArt(el(leftId),  left  && left.image,  left  ? left.albumId  : 'l', 'album');
-      setArt(el(rightId), right && right.image, right ? right.albumId : 'r', 'album');
-      el(titleId).textContent = center ? center.title : 'No recent plays';
-      el(subId).textContent = center
-        ? center.artist + ' · ' + (i + 1) + '/' + items.length
-        : 'Spotify';
+  // Build the full 3D Cover Flow stage (one card per recently-played album).
+  function buildCoverFlow() {
+    const stage = el('cf-stage');
+    const items = state.coverflow || [];
+    if (!items.length) { stage.innerHTML = ''; return; }
+    stage.innerHTML = items.map((it, i) =>
+      '<div class="cf-cover" data-i="' + i + '"><div class="art cf-cover-art" data-cfart="' + i + '"></div></div>'
+    ).join('');
+    items.forEach((it, i) => setArt(stage.querySelector('[data-cfart="' + i + '"]'), it.image, it.albumId, 'album'));
+  }
+
+  // Continuous Cover Flow transform for a card at offset `o` from the focus.
+  function coverTransform(o) {
+    const A = Math.abs(o), s = o < 0 ? -1 : 1;
+    const e = Math.min(A, 1);                 // ease 0..1 over the first unit of offset
+    const rot = -s * e * 62;                  // center flat; right tilts -62°, left +62°
+    const z = -e * 190;                       // center forward, sides pushed back in Z
+    const centerGap = 96, stack = 42;         // gap to first neighbour, then tight stacking
+    const x = A <= 1 ? o * centerGap : s * (centerGap + (A - 1) * stack);
+    const scale = 1 - e * 0.18;               // center largest
+    return { x, z, rot, scale };
+  }
+
+  function positionCovers(pos) {
+    const stage = el('cf-stage');
+    if (!stage) return;
+    const covers = stage.children;
+    for (let i = 0; i < covers.length; i++) {
+      const o = i - pos, A = Math.abs(o), t = coverTransform(o);
+      const c = covers[i];
+      c.style.transform = 'translate(-50%,-50%) translateX(' + t.x + 'px) translateZ(' + t.z + 'px) rotateY(' + t.rot + 'deg) scale(' + t.scale + ')';
+      c.style.zIndex = String(1000 - Math.round(A * 10));
+      c.style.opacity = A > 4.2 ? '0' : '1';
+      c.style.filter = 'brightness(' + (1 - Math.min(A, 1) * 0.5) + ')';
+    }
+  }
+
+  function updateCfLabel() {
+    const items = state.coverflow || [];
+    const i = clamp(Math.round(cfState().pos), 0, Math.max(0, items.length - 1));
+    const it = items[i];
+    el('cf-title').textContent = it ? it.title : 'No recent plays';
+    el('cf-sub').textContent = it ? (it.artist + ' · ' + (i + 1) + '/' + items.length) : '—';
+  }
+
+  // Inertial glide toward the snapped target index, then settle.
+  function animateCoverFlow() {
+    const st = cfState();
+    if (st.raf) cancelAnimationFrame(st.raf);
+    const step = () => {
+      st.pos += (st.target - st.pos) * 0.22;
+      if (Math.abs(st.target - st.pos) < 0.003) {
+        st.pos = st.target; positionCovers(st.pos); updateCfLabel(); st.raf = null; return;
+      }
+      positionCovers(st.pos); updateCfLabel();
+      st.raf = requestAnimationFrame(step);
     };
-    paint('menu-cf-center', 'menu-cf-left', 'menu-cf-right', 'menu-cf-title', 'menu-cf-sub');
-    paint('cf-center', 'cf-left', 'cf-right', 'cf-title', 'cf-sub');
+    st.raf = requestAnimationFrame(step);
+  }
+
+  function cfCurrentAlbum() {
+    const items = state.coverflow || [];
+    const it = items[clamp(Math.round(cfState().pos), 0, Math.max(0, items.length - 1))];
+    return it ? { id: it.albumId, name: it.title, artist: it.artist, image: it.image } : null;
   }
 
   // ===================================================================
@@ -564,8 +630,9 @@ const UI = (() => {
     const v = state.view;
     if (v === 'menu') { selMenu(state.mi); return; }
     if (v === 'coverflow') {
-      const it = (state.coverflow || [])[state.coverIndex];
-      if (it) { SpotifyAPI.playContext(it.uri).catch(noop); go('nowplaying'); }
+      // Center = drill into the focused album's tracklist (iPod Cover Flow).
+      const al = cfCurrentAlbum();
+      if (al) openAlbumDetail(al);
       return;
     }
     if (v === 'nowplaying') { Player.togglePlay(); return; }
@@ -588,11 +655,11 @@ const UI = (() => {
     } else if (v === 'coverflow') {
       const len = (state.coverflow || []).length;
       if (len) {
-        const before = state.coverIndex;
-        state.coverIndex = clamp(state.coverIndex + delta, 0, len - 1);
-        changed = state.coverIndex !== before;
-        if (changed) renderCoverflow();
-        node = el('cf-center');
+        const st = cfState();
+        const before = st.target;
+        st.target = clamp(st.target + delta, 0, len - 1);
+        changed = st.target !== before;
+        if (changed) animateCoverFlow();   // glide + snap; no scale-pop (the slide is the feedback)
       }
     } else if (['playlists', 'artists', 'albums', 'albumdetail', 'search'].indexOf(v) >= 0) {
       const rows = state.rows[v] || [];
@@ -726,6 +793,24 @@ const UI = (() => {
     el('menu-sidebar').addEventListener('click', (e) => {
       const it = e.target.closest('.menu-item');
       if (it) selMenu(+it.dataset.idx);
+    });
+
+    // Cover Flow: tap a side cover to glide it to centre; tap the centre to
+    // drill into its tracklist.
+    el('cf-stage').addEventListener('click', (e) => {
+      const card = e.target.closest('.cf-cover');
+      if (!card) return;
+      const i = +card.dataset.i;
+      const st = cfState();
+      if (i === Math.round(st.pos)) {
+        Feedback.press();
+        const al = cfCurrentAlbum();
+        if (al) openAlbumDetail(al);
+      } else {
+        Feedback.tick();
+        st.target = i;
+        animateCoverFlow();
+      }
     });
 
     el('search-chips').addEventListener('click', (e) => {
