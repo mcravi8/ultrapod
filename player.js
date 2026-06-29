@@ -14,7 +14,6 @@
    ============================================================ */
 const Player = (() => {
   let _player = null;
-  let _deviceId = null;
   let _ready = false;
   let _paused = true;       // tracked from player_state_changed for fallback toggle
   let _sdkLoaded = false;   // SDK script finished loading
@@ -34,6 +33,12 @@ const Player = (() => {
   function build() {
     if (_player || typeof Spotify === 'undefined' || !Spotify.Player) return;
 
+    // On iOS the SDK cannot output audio. Connecting it anyway registers a
+    // phantom "iPod" Spotify Connect device that grabs playback and goes silent
+    // (and Spotify shows "playing on iPod"). So don't connect on iOS — the
+    // click wheel drives the user's REAL devices through the Web API instead.
+    if (isIOS) return;
+
     _player = new Spotify.Player({
       name: 'iPod',
       // On token failure hand the SDK an empty token so it raises
@@ -45,14 +50,8 @@ const Player = (() => {
 
     // ---- ready / not-ready --------------------------------------------
     _player.addListener('ready', ({ device_id }) => {
-      _deviceId = device_id;
-      if (isIOS) {
-        // Don't mark ready and don't transfer/register: leaving
-        // SpotifyAPI._deviceId null makes play()/resume()/pause()/next()/
-        // previous() act on the user's CURRENT active Spotify device — the
-        // intended iOS fallback (the SDK can't stream audio here anyway).
-        return;
-      }
+      // Desktop only (build() returns early on iOS): the SDK device can stream,
+      // so make it our target and transfer playback to it once.
       _ready = true;
       SpotifyAPI.setDeviceId(device_id);
       // Activate this device once; never yank playback back on later reconnects.

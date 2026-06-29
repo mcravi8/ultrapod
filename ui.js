@@ -1140,8 +1140,13 @@ const UI = (() => {
   }
   function bindBodyTap() {
     el('app').addEventListener('click', (e) => {
-      // ignore taps on the screen, the wheel, or the sign-in overlay
-      if (e.target.closest('.screen') || e.target.closest('.wheel') || e.target.closest('#signin')) return;
+      // Pause the finish toggle entirely while searching: the in-app keyboard
+      // sits OUTSIDE .wheel, so every key tap would otherwise bubble here and
+      // flip the colour on each letter typed.
+      if (state.view === 'search') return;
+      // ignore taps on the screen, the wheel, the keyboard, or the sign-in overlay
+      if (e.target.closest('.screen') || e.target.closest('.wheel') ||
+          e.target.closest('#keyboard') || e.target.closest('#signin')) return;
       Feedback.press();
       applyBodyTheme(!bodyIsGraphite());
     });

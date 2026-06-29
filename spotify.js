@@ -10,6 +10,11 @@
    Playback SDK's global window.Spotify (used as `new Spotify.Player`). */
 const SpotifyAPI = (() => {
   const BASE = 'https://api.spotify.com/v1';
+  // Names this app has given its Web Playback SDK device (current + legacy).
+  // A device with one of these names lingering in /me/player/devices is a
+  // phantom SDK device that can't stream on iOS — never target it (incl. an
+  // older 'UltraPod' phantom still alive server-side after an upgrade).
+  const SDK_DEVICE_NAMES = ['iPod', 'UltraPod'];
 
   // Set by player.js once the Web Playback SDK reports a device id.
   let _deviceId = null;
@@ -39,13 +44,20 @@ const SpotifyAPI = (() => {
     let devices = [];
     try { devices = await getDevices(); } catch (e) {}
     _fallbackAt = now;
+    // Drop any phantom Web-Playback-SDK device named like our player ("iPod").
+    // On iOS that device registers but CANNOT output audio, so targeting it
+    // sends playback into silence ("Spotify says playing on iPod, but nothing
+    // plays"). We never connect it on iOS now, but a stale one can linger in the
+    // list for a few minutes after an old session — ignore it either way.
+    devices = devices.filter(d => d && d.id && SDK_DEVICE_NAMES.indexOf(d.name) === -1);
     if (!devices.length) { _fallbackId = null; return null; }
-    // Prefer the already-active device (even if it reports is_restricted — we
-    // must not steal playback off whatever the user is currently hearing), then
-    // any controllable (non-restricted) device, e.g. a paused phone, then any.
+    // Prefer the already-active device (don't steal what's currently playing),
+    // then THIS phone (so an iPhone-held iPod plays through the phone), then any
+    // controllable (non-restricted) device, e.g. a paused speaker, then any.
     const active = devices.find(d => d.is_active);
+    const phone  = devices.find(d => !d.is_restricted && d.type === 'Smartphone');
     const free   = devices.find(d => !d.is_restricted);
-    const chosen = active || free || devices[0];
+    const chosen = active || phone || free || devices[0];
     _fallbackId = (chosen && chosen.id) || null;
     return _fallbackId;
   }
