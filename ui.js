@@ -141,20 +141,48 @@ const UI = (() => {
       osc.stop(t + dur + 0.01);
     }
 
+    // --- physical haptics ----------------------------------------------
+    // iOS Safari has no navigator.vibrate. The one web technique that drives
+    // the Taptic Engine: toggle a hidden <input type="checkbox" switch> via
+    // its <label> (iOS 17.4+). We pulse that label. navigator.vibrate covers
+    // Android; older iOS just gets the audio click (graceful fallback).
+    let hapticLabel = null;
+    function ensureHaptic() {
+      if (hapticLabel !== null) return hapticLabel;
+      try {
+        const label = document.createElement('label');
+        label.setAttribute('aria-hidden', 'true');
+        label.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;pointer-events:none;';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.setAttribute('switch', '');     // iOS 17.4+ switch -> Taptic on toggle
+        input.tabIndex = -1;
+        label.appendChild(input);
+        (document.body || document.documentElement).appendChild(label);
+        hapticLabel = label;
+      } catch (e) { hapticLabel = false; }
+      return hapticLabel;
+    }
+    function haptic(ms) {
+      if (navigator.vibrate) { try { navigator.vibrate(ms || 8); } catch (e) {} }  // Android
+      const l = ensureHaptic();                                                    // iOS 17.4+
+      if (l) { try { l.click(); } catch (e) {} }
+    }
+
     // short, dry "tick" as the selection advances one step
     function tick() {
       resume();
       blip(2300, 0.05, 0.018, 'square');
-      if (navigator.vibrate) { try { navigator.vibrate(5); } catch (e) {} }
+      haptic(5);
     }
-    // softer, lower "clunk" for a button / center press
+    // softer, lower "clunk" for a button / center press / tap
     function press() {
       resume();
       blip(820, 0.08, 0.05, 'sine');
-      if (navigator.vibrate) { try { navigator.vibrate(11); } catch (e) {} }
+      haptic(12);
     }
 
-    return { resume, tick, press };
+    return { resume, tick, press, haptic };
   })();
 
   // brief scale "pop" on a node to make the highlight feel tactile.
@@ -779,6 +807,7 @@ const UI = (() => {
     const rowClick = (view) => (e) => {
       const row = e.target.closest('[data-idx]');
       if (!row) return;
+      Feedback.press();                     // physical + audio click on tap
       const idx = +row.dataset.idx;
       state.sel[view] = idx;
       applySel(view);
@@ -792,7 +821,7 @@ const UI = (() => {
 
     el('menu-sidebar').addEventListener('click', (e) => {
       const it = e.target.closest('.menu-item');
-      if (it) selMenu(+it.dataset.idx);
+      if (it) { Feedback.press(); selMenu(+it.dataset.idx); }
     });
 
     // Cover Flow: tap a side cover to glide it to centre; tap the centre to
@@ -816,6 +845,7 @@ const UI = (() => {
     el('search-chips').addEventListener('click', (e) => {
       const c = e.target.closest('.chip');
       if (!c) return;
+      Feedback.press();
       clearTimeout(searchTimer);           // cancel any pending debounced query
       el('search-input').value = c.dataset.q;
       runSearch(c.dataset.q);
