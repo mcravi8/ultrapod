@@ -919,7 +919,7 @@ const UI = (() => {
       // bias it toward the bottom so it sits a touch lower.
       const s = Math.min(wr.clientWidth / 236, (wr.clientHeight * 0.9) / 236);
       const slack = wr.clientHeight - 236 * s;   // leftover vertical space
-      const drop = slack * 0.32;                 // push down (more gap above than below)
+      const drop = slack * 0.42;                 // push down a touch more (lower wheel)
       wheel.style.transform = 'translateY(' + drop + 'px) scale(' + s + ')';
     }
   }
