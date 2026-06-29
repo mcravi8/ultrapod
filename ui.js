@@ -620,6 +620,10 @@ const UI = (() => {
   // Scale the fixed-design screen (360x412) and wheel (236) to fill their
   // flex regions, so the whole UI fills any viewport top-to-bottom.
   function fitStage() {
+    const app = el('app');
+    // window.innerHeight is the only height that is correct in an iOS
+    // standalone PWA (height:100%/100vh under-report there). Force it.
+    if (app) app.style.height = window.innerHeight + 'px';
     const screen = el('screen'), wheel = el('wheel');
     const sr = el('screen-region'), wr = el('wheel-region');
     if (sr && screen) {
@@ -764,7 +768,14 @@ const UI = (() => {
     fitStage();
     window.addEventListener('resize', fitStage);
     window.addEventListener('orientationchange', fitStage);
+    window.addEventListener('load', fitStage);
+    window.addEventListener('pageshow', fitStage);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', fitStage);
+    // iOS standalone can report a stale innerHeight on first paint; re-fit
+    // a few times as it settles.
+    setTimeout(fitStage, 150);
+    setTimeout(fitStage, 500);
+    setTimeout(fitStage, 1200);
     startClock();
     startTicker();
 
