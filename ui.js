@@ -919,12 +919,16 @@ const UI = (() => {
         '</div>' +
       '</div>';
     renderKbdRows();
-    k.addEventListener('click', onKbdTap);
+    // pointerdown (not click): registers at the exact touch point the instant
+    // the finger lands, so a tap can't be mis-hit-tested against the panel's
+    // settling scale-in animation (which made keys read "one row too low").
+    k.addEventListener('pointerdown', onKbdTap);
     _kbdBuilt = true;
   }
   function onKbdTap(e) {
     const key = e.target.closest('.kbd-key');
     if (!key) return;
+    e.preventDefault();              // keep the search caret focused; no text-select
     Feedback.press();
     const act = key.dataset.act;
     if (act === 'del')   return kbdDelete();

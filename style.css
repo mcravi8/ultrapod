@@ -313,23 +313,24 @@ body {
 #keyboard {
   position: absolute; inset: 0; z-index: 4;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transform: scale(0.78); transform-origin: 50% 45%;
+  opacity: 0; transform: scale(0.82); transform-origin: 50% 45%;
   pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.26s cubic-bezier(0.2, 0.9, 0.25, 1.25);
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.06);
 }
 #keyboard.kbd-open { opacity: 1; transform: scale(1); pointer-events: auto; }
-.kbd-panel { width: 100%; max-width: 360px; padding: 0 8px; display: flex; flex-direction: column; gap: 7px; }
+.kbd-panel { width: 100%; max-width: 376px; padding: 0 6px; display: flex; flex-direction: column; gap: 8px; }
 /* the wheel fades out beneath the keyboard. Its transform is owned by fitStage,
    so only opacity is transitioned here -- never transform -- to avoid a jump. */
 .wheel { transition: opacity 0.16s ease; }
 .wheel.kbd-hidden { opacity: 0; pointer-events: none; }
-.kbd-rows { display: flex; flex-direction: column; gap: 6px; }
-.kbd-row { display: flex; gap: 5px; justify-content: center; }
+.kbd-rows { display: flex; flex-direction: column; gap: 7px; }
+.kbd-row { display: flex; gap: 6px; justify-content: center; }
 .kbd-key {
-  flex: 1 1 0; min-width: 0; height: 40px;
+  flex: 1 1 0; min-width: 0; height: 48px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 9px; cursor: pointer; user-select: none;
-  font-size: 15px; color: #e8e8ec;
+  border-radius: 10px; cursor: pointer; user-select: none;
+  touch-action: none;                 /* register the tap ourselves on pointerdown */
+  font-size: 18px; color: #e8e8ec;
   background: radial-gradient(circle at 50% 28%, #2a2a2e, #1a1a1d 60%, #0e0e10);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 5px rgba(0,0,0,0.45);
   transition: box-shadow 0.05s ease;
@@ -340,11 +341,11 @@ body {
   transform: translateY(1px); color: #fff;
 }
 .kbd-row.kbd-bottom { margin-top: 1px; }
-.kbd-mode, .kbd-close { flex: 1.5 1 0; font-size: 12px; color: #a9a9b0; letter-spacing: 0.5px; }
-.kbd-del   { flex: 1.5 1 0; font-size: 16px; color: #c9c9cf; }
-.kbd-space { flex: 4 1 0; font-size: 12px; letter-spacing: 1px; color: #a9a9b0; }
+.kbd-mode, .kbd-close { flex: 1.5 1 0; font-size: 13px; color: #a9a9b0; letter-spacing: 0.5px; }
+.kbd-del   { flex: 1.5 1 0; font-size: 18px; color: #c9c9cf; }
+.kbd-space { flex: 4 1 0; font-size: 13px; letter-spacing: 1px; color: #a9a9b0; }
 .kbd-go {
-  flex: 2.4 1 0; font-size: 13px; font-weight: 700; color: #04130a;
+  flex: 2.4 1 0; font-size: 14px; font-weight: 700; color: #04130a;
   background: linear-gradient(118deg,#1ed760,#1db954);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 12px rgba(29,185,84,0.4);
 }
