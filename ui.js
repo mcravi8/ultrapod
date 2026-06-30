@@ -1107,7 +1107,13 @@ const UI = (() => {
       items.push({ label: '☆  Follow Artist', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Following ' + (item.name || 'artist')) });
       items.push({ label: '★  Unfollow Artist', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Unfollowed') });
     } else if (item.type === 'playlist') {
-      items.push({ label: '✕  Remove from Library', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Removed playlist') });
+      items.push({ label: '🗑  Delete Playlist', run: () => {
+        const uri = item.uri; closeActionMenu();
+        Promise.resolve(SpotifyAPI.removeFromLibrary(uri)).then(okk => {
+          toast(okk ? 'Deleted playlist' : 'Couldn’t delete');
+          if (okk) dropPlaylistFromList(uri);     // also remove it from the iPod's list
+        }).catch(() => toast('Couldn’t delete'));
+      } });
     }
     return items;
   }
@@ -1171,6 +1177,13 @@ const UI = (() => {
     if (state.menu) state.menu.open = false;
     const o = el('action-menu'); if (o) o.classList.remove('show');
   }
+  // After deleting a playlist on Spotify, drop it from the iPod's list too.
+  function dropPlaylistFromList(uri) {
+    if (!state.playlists) return;
+    state.playlists = state.playlists.filter(p => p.uri !== uri);
+    if (state.sel.playlists != null) state.sel.playlists = clamp(state.sel.playlists, 0, Math.max(0, state.playlists.length - 1));
+    if (state.view === 'playlists') loadPlaylists();   // state.playlists is set -> re-renders, no refetch
+  }
 
   // ---- Now Playing -> album / artist navigation ----------------------
   function goToCurrentAlbum() {
@@ -1207,17 +1220,25 @@ const UI = (() => {
   async function openArtist(artist) {
     if (!artist || !artist.id) { toast('No artist info'); return; }
     const tok = (state.artistReq = (state.artistReq || 0) + 1);   // discard out-of-order results
-    state.albumsSource = 'artist';
-    state.albums = null;
-    state.sel.albums = 0;
-    el('grid-albums').innerHTML = loadingHTML();
-    go('albums');
     let albums = [];
     try { albums = await SpotifyAPI.getArtistAlbums(artist.id); } catch (e) {}
-    if (state.artistReq !== tok || state.view !== 'albums') return;   // superseded / navigated away
-    if (!albums.length) { el('grid-albums').innerHTML = emptyHTML('Couldn’t open ' + esc(artist.name || 'artist')); return; }
-    state.albums = albums;
-    renderAlbumGrid(albums);
+    if (state.artistReq !== tok) return;                            // superseded
+    if (albums.length) {
+      // Browseable artist page (their albums).
+      state.albumsSource = 'artist';
+      state.albums = albums;
+      state.sel.albums = 0;
+      go('albums');
+      renderAlbumGrid(albums);
+    } else if (artist.uri) {
+      // The artist-albums catalog endpoint is restricted for dev-mode apps, so a
+      // browseable page isn't possible — fall back to PLAYING the artist.
+      afterPlay(SpotifyAPI.playContext(artist.uri));
+      go('nowplaying');
+      toast('Playing ' + (artist.name || 'artist'));
+    } else {
+      toast('Artist unavailable');
+    }
   }
 
   // ===================================================================
