@@ -594,10 +594,18 @@ const UI = (() => {
 
     let tracks = [];
     try { tracks = await SpotifyAPI.getPlaylistTracks(pl.id); } catch (e) {}
-    el('detail-sub').textContent = tracks.length ? tracks.length + ' songs' : 'Playlist';
     state.rows.albumdetail = tracks;
     state.detailUris = tracks.map(t => t.uri);
     state.sel.albumdetail = 0;
+    if (!tracks.length) {
+      // Spotify's Feb-2026 change returns track contents only for the user's OWN
+      // playlists; others come back as metadata only. We can't list them, but we
+      // can still play the playlist in its context.
+      el('detail-sub').textContent = 'Playlist';
+      el('detail-tracks').innerHTML = emptyHTML('Spotify only lets this app list your own playlists. Press the center button to play this one.');
+      return;
+    }
+    el('detail-sub').textContent = tracks.length + ' songs';
     renderTracks();
   }
 
@@ -1090,42 +1098,51 @@ const UI = (() => {
                       .catch(() => toast(failMsg || 'Couldn’t do that'));
   }
 
-  function buildMenuItems(item) {
+  // saved is a { uri: bool } map from libraryContains. Toggle logic by state:
+  //   saved===true  -> show only the REMOVE/UNFOLLOW action
+  //   saved===false -> show only the SAVE/FOLLOW action
+  //   unknown (check failed) -> show BOTH, so nothing is ever unreachable.
+  function buildMenuItems(item, saved) {
     const items = [];
+    saved = saved || {};
+    const inLib = (uri) => Object.prototype.hasOwnProperty.call(saved, uri) ? saved[uri] : null;
+    const toggle = (uri, addLabel, addMsg, delLabel, delMsg) => {
+      const s = inLib(uri);
+      if (s !== true)  items.push({ label: addLabel, run: () => menuRun(SpotifyAPI.saveToLibrary(uri), addMsg) });
+      if (s !== false) items.push({ label: delLabel, run: () => menuRun(SpotifyAPI.removeFromLibrary(uri), delMsg) });
+    };
+
     if (item.type === 'track') {
-      items.push({ label: '♥  Save to Liked Songs', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Saved to Liked Songs') });
-      items.push({ label: '✕  Remove from Liked', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Removed from Liked Songs') });
+      toggle(item.uri, '♡  Save to Liked Songs', 'Saved to Liked Songs', '♥  Remove from Liked Songs', 'Removed from Liked Songs');
       items.push({ label: '＋  Add to Playlist…', run: () => openPlaylistPicker(item.uri) });
       if (item.inPlaylist) items.push({ label: '⊟  Remove from this Playlist', run: () => { const pid = item.inPlaylist, uri = item.uri; closeActionMenu(); Promise.resolve(SpotifyAPI.removeFromPlaylist(pid, uri)).then(okk => { toast(okk ? 'Removed from playlist' : 'Couldn’t remove'); if (okk) reloadPlaylistDetail(pid); }).catch(() => toast('Couldn’t remove')); } });
       if (item.album && item.album.id) items.push({ label: '💿  Go to Album', run: () => { closeActionMenu(); openAlbumDetail({ id: item.album.id, name: item.album.name, artist: (item.artist && item.artist.name) || '', image: item.album.image }); } });
-      if (item.artist && item.artist.id) {
-        items.push({ label: '♪  Go to Artist', run: () => { closeActionMenu(); openArtist(item.artist); } });
-        items.push({ label: '☆  Follow Artist', run: () => menuRun(SpotifyAPI.saveToLibrary(item.artist.uri), 'Following ' + (item.artist.name || 'artist')) });
-        items.push({ label: '★  Unfollow Artist', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.artist.uri), 'Unfollowed') });
+      if (item.artist && item.artist.id && item.artist.uri) {
+        const a = item.artist;
+        toggle(a.uri, '☆  Follow ' + (a.name || 'Artist'), 'Following ' + (a.name || 'artist'), '★  Unfollow ' + (a.name || 'Artist'), 'Unfollowed');
       }
     } else if (item.type === 'album') {
-      items.push({ label: '♥  Save Album', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Album saved') });
-      items.push({ label: '✕  Remove Album', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Album removed') });
+      toggle(item.uri, '♡  Save Album', 'Album saved', '♥  Remove Album', 'Album removed');
     } else if (item.type === 'artist') {
-      items.push({ label: '♪  Go to Artist', run: () => { closeActionMenu(); openArtist({ id: item.id, uri: item.uri, name: item.name }); } });
-      items.push({ label: '☆  Follow Artist', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Following ' + (item.name || 'artist')) });
-      items.push({ label: '★  Unfollow Artist', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Unfollowed') });
+      toggle(item.uri, '☆  Follow ' + (item.name || 'Artist'), 'Following ' + (item.name || 'artist'), '★  Unfollow ' + (item.name || 'Artist'), 'Unfollowed');
     } else if (item.type === 'playlist') {
-      items.push({ label: '🗑  Delete Playlist', run: () => {
-        const uri = item.uri; closeActionMenu();
-        Promise.resolve(SpotifyAPI.removeFromLibrary(uri)).then(okk => {
-          toast(okk ? 'Deleted playlist' : 'Couldn’t delete');
-          if (okk) dropPlaylistFromList(uri);     // also remove it from the iPod's list
-        }).catch(() => toast('Couldn’t delete'));
-      } });
+      items.push({ label: '🗑  Delete Playlist', run: () => { const uri = item.uri; closeActionMenu(); Promise.resolve(SpotifyAPI.removeFromLibrary(uri)).then(okk => { toast(okk ? 'Deleted playlist' : 'Couldn’t delete'); if (okk) dropPlaylistFromList(uri); }).catch(() => toast('Couldn’t delete')); } });
     }
     return items;
   }
 
-  function openActionMenu() {
+  async function openActionMenu() {
     const item = currentContextItem();
     if (!item || !item.uri) { toast('Nothing selected'); return; }
-    const items = buildMenuItems(item);
+    // Look up current saved/followed state so toggles show the right action.
+    const uris = [];
+    if (item.type === 'track' || item.type === 'album' || item.type === 'artist') uris.push(item.uri);
+    if (item.type === 'track' && item.artist && item.artist.uri) uris.push(item.artist.uri);
+    const saved = {};
+    if (uris.length) {
+      try { const res = await SpotifyAPI.libraryContains(uris); uris.forEach((u, i) => { if (typeof res[i] === 'boolean') saved[u] = res[i]; }); } catch (e) {}
+    }
+    const items = buildMenuItems(item, saved);
     if (!items.length) { toast('No actions here'); return; }
     state.menu = { open: true, title: item.name || 'Actions', items, sel: 0, prev: null };
     renderActionMenu();
@@ -1260,6 +1277,10 @@ const UI = (() => {
     }
     if (v === 'nowplaying') { Player.togglePlay(); return; }
     if (v === 'search') { searchCenter(); return; }
+    // An un-listable (non-owned) playlist has no rows but a context — play it.
+    if (v === 'albumdetail' && !(state.rows.albumdetail || []).length && state.detailContextUri) {
+      afterPlay(SpotifyAPI.playContext(state.detailContextUri)); go('nowplaying'); return;
+    }
     if (['playlists', 'artists', 'albums', 'albumdetail', 'devices'].indexOf(v) >= 0) {
       activate(v, state.sel[v] || 0);
     }
