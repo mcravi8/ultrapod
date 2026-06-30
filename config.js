@@ -29,5 +29,5 @@ const CONFIG = {
   //   user-read-recently-played -> Cover Flow (getRecentlyPlayed)
   //   user-follow-read          -> Artists (GET /me/following?type=artist)
   // This is a superset of the baseline scopes.
-  SCOPES: 'user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private user-library-read streaming user-read-recently-played user-follow-read'
+  SCOPES: 'user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-modify-public playlist-modify-private user-library-read user-library-modify streaming user-read-recently-played user-follow-read user-follow-modify'
 };

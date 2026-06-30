@@ -75,7 +75,7 @@ const UI = (() => {
     'radial-gradient(circle at 38% 30%, #ff9ec4, #a14d7a)'
   ];
   // Spotify renders the Liked Songs cover as a violet gradient (kept authentic).
-  const LIKED_GRAD = 'linear-gradient(135deg,#4422cc,#9b6cff)';
+  const LIKED_GRAD = 'linear-gradient(135deg,#4a1fd0 0%,#7b46ef 55%,#bda1f5 100%)';
 
   function hash(str) {
     let h = 0; str = String(str || '');
@@ -105,6 +105,13 @@ const UI = (() => {
     if (!node) return;
     node.style.background = grad;
     node.innerHTML = '';
+  }
+  // The iconic Spotify "Liked Songs" cover: purple gradient + a white heart.
+  function setLikedArt(node) {
+    if (!node) return;
+    node.style.background = LIKED_GRAD;
+    node.innerHTML = '<svg class="liked-heart" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">' +
+      '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>';
   }
 
   // ===================================================================
@@ -293,6 +300,11 @@ const UI = (() => {
   // MENU steps back to the sidebar from any sub-view. If we're ALREADY on the
   // sidebar, a second MENU press jumps to Now Playing (iPod-style shortcut).
   function goMenu() {
+    if (menuOpen()) {                       // MENU backs out of the context menu
+      if (state.menu.prev) { state.menu = Object.assign({ open: true }, state.menu.prev); renderActionMenu(); }
+      else closeActionMenu();
+      return;
+    }
     if (state.view === 'menu') go('nowplaying');
     else go('menu');
   }
@@ -458,24 +470,17 @@ const UI = (() => {
   }
 
   async function loadAlbums() {
-    const cont = el('grid-albums');
-    if (!state.albums) {
-      cont.innerHTML = loadingHTML();
+    // The albums grid is shared with the artist page (openArtist). When showing
+    // an artist, openArtist owns the fetch/render — don't refetch saved albums.
+    if (state.albumsSource === 'artist') { if (state.albums) renderAlbumGrid(state.albums); return; }
+    if (!state.albums || state.albumsSource !== 'saved') {
+      el('grid-albums').innerHTML = loadingHTML();
       try { state.albums = await SpotifyAPI.getSavedAlbums(); }
       catch (e) { state.albums = []; }
+      state.albumsSource = 'saved';
     }
-    state.rows.albums = state.albums;
-    if (!state.albums.length) { cont.innerHTML = emptyHTML('No albums found'); return; }
-    cont.innerHTML = state.albums.map((al, idx) =>
-      '<div class="album-cell" data-idx="' + idx + '">' +
-        '<div class="art album-art" data-art="' + idx + '"></div>' +
-        '<div class="album-name">' + esc(al.name) + '</div>' +
-        '<div class="album-artist">' + esc(al.artist) + '</div>' +
-      '</div>'
-    ).join('');
-    state.albums.forEach((al, idx) => setArt(cont.querySelector('[data-art="' + idx + '"]'), al.image, al.id, 'album'));
     if (state.sel.albums == null) state.sel.albums = 0;
-    applySel('albums');
+    renderAlbumGrid(state.albums);
   }
 
   // ===================================================================
@@ -540,6 +545,7 @@ const UI = (() => {
   async function openAlbumDetail(album) {
     state.detailAlbum = album;            // reused for optimistic Now Playing art/artist
     state.detailContextUri = null;        // albums play via the track-uri list
+    state.detailPlaylist = null;          // not a playlist context
     setArt(el('detail-art'), album.image, album.id || album.name, 'album');
     el('detail-title').textContent = album.name;
     el('detail-sub').textContent = album.artist + (album.year ? ' · ' + album.year : '');
@@ -557,7 +563,8 @@ const UI = (() => {
   async function openAllMusic() {
     state.detailAlbum = null;             // Liked Songs: per-track art/artist comes from the rows
     state.detailContextUri = null;        // Liked Songs play via the track-uri list
-    setArtGradient(el('detail-art'), LIKED_GRAD);
+    state.detailPlaylist = null;          // not a playlist context
+    setLikedArt(el('detail-art'));
     el('detail-title').textContent = 'Songs';
     el('detail-sub').textContent = 'Liked Songs';
     el('detail-tracks').innerHTML = loadingHTML();
@@ -577,6 +584,7 @@ const UI = (() => {
   async function openPlaylist(pl) {
     state.detailAlbum = null;             // per-track art/artist comes from the rows
     state.detailContextUri = pl.uri;      // play in the playlist's context
+    state.detailPlaylist = pl;            // enables "Remove from this Playlist"
     if (pl.image) setArt(el('detail-art'), pl.image, pl.id || pl.name, 'album');
     else setArtGradient(el('detail-art'), gradientFor(pl.id || pl.name || 'pl', 'album'));
     el('detail-title').textContent = pl.name;
@@ -622,6 +630,23 @@ const UI = (() => {
     if (npPoll) { clearInterval(npPoll); npPoll = null; }
   }
 
+  // Track the album/artist of the current song so "go to album / go to artist"
+  // and the context menu have something to act on. SDK track objects expose
+  // spotify:album:ID / spotify:artist:ID uris (no bare id) — derive id from uri.
+  function uriId(uri) { const p = String(uri || '').split(':'); return p.length === 3 ? p[2] : null; }
+  function setNpMeta(album, artists, trackUri, trackName) {
+    const a0 = (artists && artists[0]) || null;
+    state.npMeta = {
+      trackUri: trackUri || null,
+      trackName: trackName || '',
+      album: album ? {
+        id: album.id || uriId(album.uri), uri: album.uri, name: album.name,
+        image: album.image || (album.images && album.images[0] && album.images[0].url) || null
+      } : null,
+      artist: a0 ? { id: a0.id || uriId(a0.uri), uri: a0.uri, name: a0.name } : null
+    };
+  }
+
   async function refreshNowPlaying() {
     let cur = null;
     try { cur = await SpotifyAPI.getCurrentlyPlaying(); } catch (e) {}
@@ -636,6 +661,7 @@ const UI = (() => {
       }
       state.npOptimisticUntil = 0;                // real data for the new track arrived
       state.currentUri = cur.uri;
+      setNpMeta(cur.album, cur.artists, cur.uri, cur.name);
       state.np = { progress_ms: cur.progress_ms, duration_ms: cur.duration_ms, is_playing: cur.is_playing, baseTime: Date.now() };
       // Only touch the Now Playing DOM if it's still the active view (a slow
       // fetch can resolve after the user navigated away).
@@ -702,6 +728,7 @@ const UI = (() => {
     const cur = s.track_window && s.track_window.current_track;
     if (!cur) return;
     state.currentUri = cur.uri;
+    setNpMeta(cur.album, cur.artists, cur.uri, cur.name);
     state.np = { progress_ms: s.position, duration_ms: s.duration, is_playing: !s.paused, baseTime: Date.now() };
     if (state.view === 'nowplaying') {
       el('np-title').textContent = cur.name;
@@ -1004,9 +1031,179 @@ const UI = (() => {
   }
 
   // ===================================================================
+  //  Context action menu (center-hold) + Now-Playing navigation
+  //  Like/save, add to playlist, follow, remove, go to album/artist — for the
+  //  highlighted item or the current song. Wheel-navigable; MENU backs out.
+  // ===================================================================
+  function menuOpen() { return !!(state.menu && state.menu.open); }
+
+  // Resolve the item the menu acts on, from the current view + selection.
+  function currentContextItem() {
+    const v = state.view;
+    if (v === 'nowplaying') {
+      const m = state.npMeta;
+      const uri = (m && m.trackUri) || state.currentUri;
+      if (!uri) return null;
+      return { type: 'track', uri, name: el('np-title').textContent,
+               album: m && m.album, artist: m && m.artist,
+               inPlaylist: null };
+    }
+    if (v === 'albumdetail') {
+      const t = (state.rows.albumdetail || [])[state.sel.albumdetail || 0];
+      if (!t) return null;
+      return { type: 'track', uri: t.uri, name: t.name,
+               album: state.detailAlbum ? { id: state.detailAlbum.id, name: state.detailAlbum.name, image: state.detailAlbum.image } : null,
+               artist: null,
+               inPlaylist: state.detailPlaylist ? state.detailPlaylist.id : null };
+    }
+    if (v === 'coverflow') { const al = cfCurrentAlbum(); return al ? { type: 'album', uri: 'spotify:album:' + al.id, id: al.id, name: al.name } : null; }
+    const rows = state.rows[v] || [];
+    const it = rows[state.sel[v] || 0];
+    if (!it) return null;
+    if (v === 'playlists') return { type: 'playlist', uri: it.uri, id: it.id, name: it.name };
+    if (v === 'albums')    return { type: 'album', uri: it.uri, id: it.id, name: it.name };
+    if (v === 'artists')   return { type: 'artist', uri: it.uri, id: it.id, name: it.name };
+    if (v === 'search')    return { type: it.type, uri: it.uri, id: it.id, name: it.name };
+    return null;
+  }
+
+  // run a write promise, close the menu, toast the outcome
+  function menuRun(p, okMsg, failMsg) {
+    closeActionMenu();
+    Promise.resolve(p).then(okk => toast(okk ? okMsg : (failMsg || 'Couldn’t do that')))
+                      .catch(() => toast(failMsg || 'Couldn’t do that'));
+  }
+
+  function buildMenuItems(item) {
+    const items = [];
+    if (item.type === 'track') {
+      items.push({ label: '♥  Save to Liked Songs', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Saved to Liked Songs') });
+      items.push({ label: '✕  Remove from Liked', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Removed from Liked Songs') });
+      items.push({ label: '＋  Add to Playlist…', run: () => openPlaylistPicker(item.uri) });
+      if (item.inPlaylist) items.push({ label: '⊟  Remove from this Playlist', run: () => { const pid = item.inPlaylist, uri = item.uri; closeActionMenu(); Promise.resolve(SpotifyAPI.removeFromPlaylist(pid, uri)).then(okk => { toast(okk ? 'Removed from playlist' : 'Couldn’t remove'); if (okk) reloadPlaylistDetail(pid); }).catch(() => toast('Couldn’t remove')); } });
+      if (item.album && item.album.id) items.push({ label: '💿  Go to Album', run: () => { closeActionMenu(); openAlbumDetail({ id: item.album.id, name: item.album.name, artist: (item.artist && item.artist.name) || '', image: item.album.image }); } });
+      if (item.artist && item.artist.id) {
+        items.push({ label: '♪  Go to Artist', run: () => { closeActionMenu(); openArtist(item.artist); } });
+        items.push({ label: '☆  Follow Artist', run: () => menuRun(SpotifyAPI.saveToLibrary(item.artist.uri), 'Following ' + (item.artist.name || 'artist')) });
+        items.push({ label: '★  Unfollow Artist', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.artist.uri), 'Unfollowed') });
+      }
+    } else if (item.type === 'album') {
+      items.push({ label: '♥  Save Album', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Album saved') });
+      items.push({ label: '✕  Remove Album', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Album removed') });
+    } else if (item.type === 'artist') {
+      items.push({ label: '♪  Go to Artist', run: () => { closeActionMenu(); openArtist({ id: item.id, uri: item.uri, name: item.name }); } });
+      items.push({ label: '☆  Follow Artist', run: () => menuRun(SpotifyAPI.saveToLibrary(item.uri), 'Following ' + (item.name || 'artist')) });
+      items.push({ label: '★  Unfollow Artist', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Unfollowed') });
+    } else if (item.type === 'playlist') {
+      items.push({ label: '✕  Remove from Library', run: () => menuRun(SpotifyAPI.removeFromLibrary(item.uri), 'Removed playlist') });
+    }
+    return items;
+  }
+
+  function openActionMenu() {
+    const item = currentContextItem();
+    if (!item || !item.uri) { toast('Nothing selected'); return; }
+    const items = buildMenuItems(item);
+    if (!items.length) { toast('No actions here'); return; }
+    state.menu = { open: true, title: item.name || 'Actions', items, sel: 0, prev: null };
+    renderActionMenu();
+  }
+
+  async function openPlaylistPicker(trackUri) {
+    let lists = state.playlists;
+    if (!lists) { try { lists = state.playlists = await SpotifyAPI.getPlaylists(); } catch (e) { lists = []; } }
+    let meId = null; try { meId = (await SpotifyAPI.getMe()).id; } catch (e) {}
+    const owned = (lists || []).filter(p => (meId && p.owner === meId) || p.collaborative);
+    if (!owned.length) { toast('No editable playlists'); return; }
+    const prev = menuOpen() ? { title: state.menu.title, items: state.menu.items, sel: state.menu.sel, prev: state.menu.prev } : null;
+    const items = owned.map(p => ({ label: p.name, run: () => { closeActionMenu(); Promise.resolve(SpotifyAPI.addToPlaylist(p.id, trackUri)).then(okk => toast(okk ? 'Added to ' + p.name : 'Couldn’t add')).catch(() => toast('Couldn’t add')); } }));
+    state.menu = { open: true, title: 'Add to Playlist', items, sel: 0, prev };
+    renderActionMenu();
+  }
+
+  function renderActionMenu() {
+    const o = el('action-menu');
+    if (!o || !state.menu) return;
+    const m = state.menu;
+    o.innerHTML =
+      '<div class="am-card">' +
+        '<div class="am-title">' + esc(m.title) + '</div>' +
+        '<div class="am-list">' +
+          m.items.map((it, i) => '<div class="am-item' + (i === m.sel ? ' sel' : '') + '" data-i="' + i + '">' + esc(it.label) + '</div>').join('') +
+        '</div>' +
+      '</div>';
+    o.classList.add('show');
+    const sel = o.querySelector('.am-item.sel');
+    if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+  }
+  function menuScroll(delta) {
+    const m = state.menu; if (!m) return;
+    const before = m.sel;
+    m.sel = clamp(m.sel + delta, 0, m.items.length - 1);
+    if (m.sel !== before) { renderActionMenu(); Feedback.tick(); }
+  }
+  function menuActivate() {
+    const m = state.menu; if (!m) return;
+    const it = m.items[m.sel];
+    if (it && it.run) { Feedback.press(); it.run(); }
+  }
+  function closeActionMenu() {
+    if (state.menu) state.menu.open = false;
+    const o = el('action-menu'); if (o) o.classList.remove('show');
+  }
+
+  // ---- Now Playing -> album / artist navigation ----------------------
+  function goToCurrentAlbum() {
+    const m = state.npMeta;
+    if (m && m.album && m.album.id) openAlbumDetail({ id: m.album.id, name: m.album.name, artist: (m.artist && m.artist.name) || '', image: m.album.image });
+    else toast('No album info yet');
+  }
+  function goToCurrentArtist() {
+    const m = state.npMeta;
+    if (m && m.artist && m.artist.id) openArtist(m.artist);
+    else toast('No artist info yet');
+  }
+  function reloadPlaylistDetail(pid) {
+    const pl = state.detailPlaylist;
+    if (pl && pl.id === pid) openPlaylist(pl);
+  }
+
+  // ---- artist page: the artist's albums, reusing the albums grid -----
+  function renderAlbumGrid(albums) {
+    const cont = el('grid-albums');
+    state.rows.albums = albums;
+    if (state.sel.albums == null) state.sel.albums = 0;
+    if (!albums.length) { cont.innerHTML = emptyHTML('No albums'); return; }
+    cont.innerHTML = albums.map((al, idx) =>
+      '<div class="album-cell" data-idx="' + idx + '">' +
+        '<div class="art album-art" data-art="' + idx + '"></div>' +
+        '<div class="album-name">' + esc(al.name) + '</div>' +
+        '<div class="album-artist">' + esc(al.artist) + '</div>' +
+      '</div>'
+    ).join('');
+    albums.forEach((al, idx) => setArt(cont.querySelector('[data-art="' + idx + '"]'), al.image, al.id, 'album'));
+    applySel('albums');
+  }
+  async function openArtist(artist) {
+    if (!artist || !artist.id) { toast('No artist info'); return; }
+    state.albumsSource = 'artist';
+    state.albums = null;
+    state.sel.albums = 0;
+    el('grid-albums').innerHTML = loadingHTML();
+    go('albums');
+    let albums = [];
+    try { albums = await SpotifyAPI.getArtistAlbums(artist.id); } catch (e) {}
+    if (state.view !== 'albums') return;            // user navigated away mid-fetch
+    if (!albums.length) { el('grid-albums').innerHTML = emptyHTML('Couldn’t open ' + esc(artist.name || 'artist')); return; }
+    state.albums = albums;
+    renderAlbumGrid(albums);
+  }
+
+  // ===================================================================
   //  Click wheel: center + scroll dispatch
   // ===================================================================
   function onCenter() {
+    if (menuOpen()) { menuActivate(); return; }   // context menu takes the wheel
     const v = state.view;
     if (v === 'menu') { selMenu(state.mi); return; }
     if (v === 'coverflow') {
@@ -1025,6 +1222,7 @@ const UI = (() => {
   // Advance the selection by one step; fire the click-wheel "tick" (audio +
   // haptic) and a brief on-screen pulse only when the highlight actually moves.
   function onScroll(delta) {
+    if (menuOpen()) { menuScroll(delta); return; }   // context menu takes the wheel
     const v = state.view;
     let changed = false, node = null;
 
@@ -1114,6 +1312,8 @@ const UI = (() => {
   let volMode = false, volLevel = 50, volAccum = 0;
   let holdTimer = null, holdMoved = 0, volApplyTimer = null, volFailNoticed = false;
   let wheelDown = false;        // pointer currently held on the wheel
+  const CENTER_HOLD_MS = 450;   // hold the CENTER button this long -> context menu
+  let centerHoldTimer = null;
 
   function showVolHud()   { const h = el('vol-hud'); if (h) h.classList.add('show'); updateVolHud(); }
   function hideVolHud()   { const h = el('vol-hud'); if (h) h.classList.remove('show'); }
@@ -1183,7 +1383,20 @@ const UI = (() => {
       drag.last = angleAt(e);
       holdMoved = 0;
       if (holdTimer) clearTimeout(holdTimer);
-      holdTimer = setTimeout(enterVolumeMode, HOLD_MS);   // hold still to arm volume
+      if (centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }
+      if (menuOpen()) {
+        // Context menu is open: the wheel only navigates it (rotation -> onScroll
+        // -> menuScroll). Arm neither volume nor the menu-open hold.
+      } else if (e.target.closest('.wheel-center')) {
+        // Long-press the CENTER -> context action menu. Don't arm volume (that's
+        // a ring gesture); mark wheelMoved so the trailing click is swallowed.
+        centerHoldTimer = setTimeout(() => {
+          centerHoldTimer = null; wheelMoved = true;
+          Feedback.press(); openActionMenu();
+        }, CENTER_HOLD_MS);
+      } else {
+        holdTimer = setTimeout(enterVolumeMode, HOLD_MS);   // hold still to arm volume
+      }
       try { wheel.setPointerCapture(e.pointerId); } catch (_) {}
     });
     wheel.addEventListener('pointermove', (e) => {
@@ -1207,7 +1420,10 @@ const UI = (() => {
 
       // Rotating before the hold fires means it's a scroll, not a hold — cancel.
       holdMoved += Math.abs(d);
-      if (holdMoved > 16 && holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (holdMoved > 16) {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        if (centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }   // became a scroll, not a hold
+      }
 
       drag.acc += d;
       while (Math.abs(drag.acc) >= STEP) {
@@ -1221,6 +1437,7 @@ const UI = (() => {
     const end = () => {
       drag.active = false; wheelDown = false;
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }
       if (volMode) exitVolumeMode();
     };
     wheel.addEventListener('pointerup', end);
@@ -1263,6 +1480,19 @@ const UI = (() => {
     el('grid-albums').addEventListener('click', rowClick('albums'));
     el('detail-tracks').addEventListener('click', rowClick('albumdetail'));
     el('list-devices').addEventListener('click', rowClick('devices'));
+
+    // Now Playing: tap the title -> the song's album; tap the artist -> artist.
+    el('np-title').addEventListener('click', () => { Feedback.press(); goToCurrentAlbum(); });
+    el('np-artist').addEventListener('click', () => { Feedback.press(); goToCurrentArtist(); });
+
+    // Context action menu: tap a row to run it (mirrors center on the wheel).
+    el('action-menu').addEventListener('click', (e) => {
+      if (e.target.closest('.am-card') == null) { closeActionMenu(); return; }  // tap backdrop = dismiss
+      const row = e.target.closest('.am-item');
+      if (!row || !state.menu) return;
+      state.menu.sel = +row.dataset.i;
+      menuActivate();
+    });
 
     // Search results use the dedicated focus model (0 = box, 1.. = rows).
     el('search-results').addEventListener('click', (e) => {

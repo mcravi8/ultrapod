@@ -138,6 +138,10 @@ const SpotifyAPI = (() => {
     if (!images || !images.length) return null;
     return images[0].url;
   }
+  // Compact album / first-artist refs carried on each track row, so the context
+  // menu can "go to album / go to artist / follow" per-track from any list.
+  function albumRef(al) { return al ? { id: al.id, uri: al.uri, name: al.name, image: smallestImage(al.images) } : null; }
+  function artistRef(arts) { const a = arts && arts[0]; return a ? { id: a.id, uri: a.uri, name: a.name } : null; }
 
   // ===================================================================
   //  Library / browse
@@ -152,6 +156,8 @@ const SpotifyAPI = (() => {
       name: p.name,
       image: smallestImage(p.images),
       uri: p.uri,
+      owner: p.owner ? p.owner.id : null,
+      collaborative: !!p.collaborative,
       type: 'playlist'
     }));
   }
@@ -196,6 +202,7 @@ const SpotifyAPI = (() => {
       name: t.name,
       duration_ms: t.duration_ms,
       track_number: t.track_number,
+      artistRef: artistRef(t.artists),   // album comes from the album being viewed
       uri: t.uri,
       type: 'track'
     }));
@@ -214,6 +221,7 @@ const SpotifyAPI = (() => {
         track_number: i + 1,
         artist: (t.artists || []).map(a => a.name).join(', '),
         image: t.album ? smallestImage(t.album.images) : null,
+        album: albumRef(t.album), artistRef: artistRef(t.artists),
         uri: t.uri,
         type: 'track'
       }));
@@ -238,6 +246,7 @@ const SpotifyAPI = (() => {
         track_number: i + 1,
         artist: (t.artists || []).map(a => a.name).join(', '),
         image: t.album ? smallestImage(t.album.images) : null,
+        album: albumRef(t.album), artistRef: artistRef(t.artists),
         uri: t.uri,
         type: 'track'
       }));
@@ -278,6 +287,9 @@ const SpotifyAPI = (() => {
       artist: (t.artists || []).map(a => a.name).join(', '),
       albumName: t.album ? t.album.name : '',
       image: t.album ? largestImage(t.album.images) : null,
+      // album + artist refs power "go to album / go to artist" from Now Playing
+      album: t.album ? { id: t.album.id, uri: t.album.uri, name: t.album.name, image: largestImage(t.album.images) } : null,
+      artists: (t.artists || []).map(a => ({ id: a.id, uri: a.uri, name: a.name })),
       progress_ms: data.progress_ms || 0,
       duration_ms: t.duration_ms || 0,
       is_playing: !!data.is_playing,
@@ -450,13 +462,74 @@ const SpotifyAPI = (() => {
     return 'error';
   }
 
+  // ===================================================================
+  //  Library / playlist WRITES (Spotify Feb-2026 generic endpoints)
+  //  Save/follow anything (track, album, artist, playlist) via the same
+  //  PUT/DELETE /me/library with a {uris:[...]} body. Playlist contents go
+  //  through POST/DELETE /playlists/{id}/items. All return true on success.
+  // ===================================================================
+  let _meId = null;
+  async function getMe() {
+    if (_meId) return { id: _meId };
+    const data = await getJSON('/me');
+    if (data && data.id) _meId = data.id;
+    return data || {};
+  }
+
+  // GET /v1/artists/{id}/albums -> [{ id, name, artist, image, year, uri }]
+  async function getArtistAlbums(artistId) {
+    const data = await getJSON('/artists/' + artistId + '/albums?include_groups=album,single&limit=50');
+    if (!data || !data.items) return [];
+    const seen = {};
+    return data.items.filter(Boolean).filter(al => {        // de-dupe re-releases by name
+      const k = (al.name || '').toLowerCase();
+      if (seen[k]) return false; seen[k] = true; return true;
+    }).map(al => ({
+      id: al.id,
+      name: al.name,
+      artist: (al.artists || []).map(a => a.name).join(', '),
+      image: largestImage(al.images),
+      year: (al.release_date || '').slice(0, 4),
+      uri: al.uri,
+      type: 'album'
+    }));
+  }
+
+  async function saveToLibrary(uris) {
+    const list = Array.isArray(uris) ? uris : [uris];
+    const res = await api('/me/library', { method: 'PUT', body: { uris: list } });
+    return ok(res);
+  }
+  async function removeFromLibrary(uris) {
+    const list = Array.isArray(uris) ? uris : [uris];
+    const res = await api('/me/library', { method: 'DELETE', body: { uris: list } });
+    return ok(res);
+  }
+  async function addToPlaylist(playlistId, uris) {
+    const list = Array.isArray(uris) ? uris : [uris];
+    const res = await api('/playlists/' + playlistId + '/items', { method: 'POST', body: { uris: list } });
+    return ok(res);
+  }
+  async function removeFromPlaylist(playlistId, uris) {
+    const list = Array.isArray(uris) ? uris : [uris];
+    const res = await api('/playlists/' + playlistId + '/items', { method: 'DELETE', body: { uris: list } });
+    return ok(res);
+  }
+  // GET /v1/me/library/contains?uris=... -> [bool] (parallel to the uris order)
+  async function libraryContains(uris) {
+    const list = Array.isArray(uris) ? uris : [uris];
+    const data = await getJSON('/me/library/contains?uris=' + encodeURIComponent(list.join(',')));
+    return Array.isArray(data) ? data : list.map(() => false);
+  }
+
   return {
     setDeviceId, setPreferredDevice, getDevices,
     getPlaylists, getFollowedArtists, getSavedAlbums, getAlbumTracks,
     getPlaylistTracks, getSavedTracks, getRecentlyPlayed,
-    getCurrentlyPlaying, search,
+    getCurrentlyPlaying, search, getMe, getArtistAlbums,
     playContext, playTracks, transferPlayback,
     resume, pause, next, previous,
-    setVolume, getActiveDevice
+    setVolume, getActiveDevice,
+    saveToLibrary, removeFromLibrary, addToPlaylist, removeFromPlaylist, libraryContains
   };
 })();

@@ -247,6 +247,8 @@ body {
    ALBUM DETAIL VIEW
    ============================================================ */
 .detail-art { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 120px; height: 120px; border-radius: 9px; overflow: hidden; box-shadow: 0 18px 32px -8px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.12); }
+/* white heart for the Spotify "Liked Songs" cover */
+.liked-heart { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 46%; height: 46%; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.22)); }
 .detail-title { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 700; color: #fff; padding: 0 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .detail-sub { position: absolute; top: 175px; left: 0; right: 0; text-align: center; font-size: 12px; color: #8b8b92; }
 .detail-tracks { position: absolute; top: 204px; left: 6px; right: 6px; bottom: 10px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -402,3 +404,36 @@ body {
   #rotate-guard .rotate-msg { font-size: 18px; font-weight: 700; }
   #rotate-guard .rotate-sub { font-size: 13px; color: #8b8b92; }
 }
+
+/* ============================================================
+   CONTEXT ACTION MENU (center-hold) + Now-Playing tap targets
+   ============================================================ */
+.action-menu {
+  position: absolute; inset: 0; z-index: 120; display: none;
+  align-items: center; justify-content: center; padding: 18px;
+  background: rgba(0,0,0,0.55);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.action-menu.show { display: flex; }
+.am-card {
+  width: 100%; max-width: 300px; max-height: 90%;
+  display: flex; flex-direction: column;
+  border-radius: 16px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(32,32,36,0.98), rgba(18,18,22,0.98));
+  box-shadow: 0 20px 50px -12px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.am-title {
+  padding: 13px 16px 9px; font-size: 12px; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.am-list { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 5px; }
+.am-item {
+  padding: 11px 12px; border-radius: 10px; font-size: 13px; color: #dcdce0;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background-color 0.08s ease;
+}
+.am-item.sel { background: linear-gradient(118deg,#1ed760,#1db954); color: #06140b; font-weight: 600; }
+
+/* Now Playing title/artist are tappable shortcuts (album / artist) */
+.np-title, .np-artist { cursor: pointer; }
