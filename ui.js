@@ -646,6 +646,9 @@ const UI = (() => {
       artist: a0 ? { id: a0.id || uriId(a0.uri), uri: a0.uri, name: a0.name } : null
     };
   }
+  // npMeta is trustworthy only when it describes the track that's actually
+  // current — during the optimistic window currentUri jumps ahead of npMeta.
+  function npMetaFresh() { return !!(state.npMeta && state.npMeta.trackUri && state.npMeta.trackUri === state.currentUri); }
 
   async function refreshNowPlaying() {
     let cur = null;
@@ -693,6 +696,10 @@ const UI = (() => {
   function showNowPlayingOptimistic(meta) {
     if (!meta) return;
     if (meta.uri) state.currentUri = meta.uri;
+    // Keep npMeta in step with the optimistic track (so go-to-album/artist
+    // doesn't point at the PREVIOUS song); refs are filled when the picked
+    // item carries them, else reconciled by the next poll.
+    setNpMeta(meta.album || null, meta.artistRef ? [meta.artistRef] : (meta.artists || null), meta.uri, meta.name);
     state.np = { progress_ms: 0, duration_ms: meta.duration_ms || 0, is_playing: true, baseTime: Date.now() };
     state.npOptimisticUntil = Date.now() + 5000;
     el('np-title').textContent = meta.name || '—';
@@ -1007,7 +1014,9 @@ const UI = (() => {
       go('nowplaying');
       showNowPlayingOptimistic({
         name: item.name, uri: item.uri, duration_ms: item.duration_ms,
-        artist: item.artist || (al && al.artist), image: item.image || (al && al.image)
+        artist: item.artist || (al && al.artist), image: item.image || (al && al.image),
+        album: item.album || (al && al.id ? { id: al.id, uri: 'spotify:album:' + al.id, name: al.name, image: al.image } : null),
+        artistRef: item.artistRef || null
       });
     }
     else if (view === 'search') {
@@ -1041,22 +1050,25 @@ const UI = (() => {
   function currentContextItem() {
     const v = state.view;
     if (v === 'nowplaying') {
+      const fresh = npMetaFresh();              // album/artist only when they match the live track
       const m = state.npMeta;
-      const uri = (m && m.trackUri) || state.currentUri;
+      const uri = state.currentUri || (m && m.trackUri);
       if (!uri) return null;
       return { type: 'track', uri, name: el('np-title').textContent,
-               album: m && m.album, artist: m && m.artist,
+               album: fresh ? m.album : null, artist: fresh ? m.artist : null,
                inPlaylist: null };
     }
     if (v === 'albumdetail') {
       const t = (state.rows.albumdetail || [])[state.sel.albumdetail || 0];
       if (!t) return null;
+      // Use the track's OWN album/artist (playlist & Liked Songs mix many);
+      // album-view tracks fall back to the album being viewed.
       return { type: 'track', uri: t.uri, name: t.name,
-               album: state.detailAlbum ? { id: state.detailAlbum.id, name: state.detailAlbum.name, image: state.detailAlbum.image } : null,
-               artist: null,
+               album: t.album || (state.detailAlbum ? { id: state.detailAlbum.id, name: state.detailAlbum.name, image: state.detailAlbum.image } : null),
+               artist: t.artistRef || null,
                inPlaylist: state.detailPlaylist ? state.detailPlaylist.id : null };
     }
-    if (v === 'coverflow') { const al = cfCurrentAlbum(); return al ? { type: 'album', uri: 'spotify:album:' + al.id, id: al.id, name: al.name } : null; }
+    if (v === 'coverflow') { const al = cfCurrentAlbum(); return (al && al.id) ? { type: 'album', uri: 'spotify:album:' + al.id, id: al.id, name: al.name } : null; }
     const rows = state.rows[v] || [];
     const it = rows[state.sel[v] || 0];
     if (!it) return null;
@@ -1110,12 +1122,20 @@ const UI = (() => {
   }
 
   async function openPlaylistPicker(trackUri) {
+    // Capture the back-target + show a loading picker SYNCHRONOUSLY so the
+    // track menu can't be re-navigated during the fetch (reentrancy). A token
+    // discards a stale fetch if the user backed out / opened another picker.
+    const prev = menuOpen() ? { title: state.menu.title, items: state.menu.items, sel: state.menu.sel, prev: state.menu.prev } : null;
+    const token = (state.menuReq = (state.menuReq || 0) + 1);
+    state.menu = { open: true, title: 'Add to Playlist', items: [{ label: 'Loading…', run: () => {} }], sel: 0, prev };
+    renderActionMenu();
+
     let lists = state.playlists;
     if (!lists) { try { lists = state.playlists = await SpotifyAPI.getPlaylists(); } catch (e) { lists = []; } }
     let meId = null; try { meId = (await SpotifyAPI.getMe()).id; } catch (e) {}
+    if (state.menuReq !== token || !menuOpen()) return;     // superseded or dismissed
     const owned = (lists || []).filter(p => (meId && p.owner === meId) || p.collaborative);
-    if (!owned.length) { toast('No editable playlists'); return; }
-    const prev = menuOpen() ? { title: state.menu.title, items: state.menu.items, sel: state.menu.sel, prev: state.menu.prev } : null;
+    if (!owned.length) { closeActionMenu(); toast('No editable playlists'); return; }
     const items = owned.map(p => ({ label: p.name, run: () => { closeActionMenu(); Promise.resolve(SpotifyAPI.addToPlaylist(p.id, trackUri)).then(okk => toast(okk ? 'Added to ' + p.name : 'Couldn’t add')).catch(() => toast('Couldn’t add')); } }));
     state.menu = { open: true, title: 'Add to Playlist', items, sel: 0, prev };
     renderActionMenu();
@@ -1142,10 +1162,10 @@ const UI = (() => {
     m.sel = clamp(m.sel + delta, 0, m.items.length - 1);
     if (m.sel !== before) { renderActionMenu(); Feedback.tick(); }
   }
-  function menuActivate() {
+  function menuActivate() {                  // caller owns the click feedback
     const m = state.menu; if (!m) return;
     const it = m.items[m.sel];
-    if (it && it.run) { Feedback.press(); it.run(); }
+    if (it && it.run) it.run();
   }
   function closeActionMenu() {
     if (state.menu) state.menu.open = false;
@@ -1155,12 +1175,12 @@ const UI = (() => {
   // ---- Now Playing -> album / artist navigation ----------------------
   function goToCurrentAlbum() {
     const m = state.npMeta;
-    if (m && m.album && m.album.id) openAlbumDetail({ id: m.album.id, name: m.album.name, artist: (m.artist && m.artist.name) || '', image: m.album.image });
+    if (npMetaFresh() && m.album && m.album.id) openAlbumDetail({ id: m.album.id, name: m.album.name, artist: (m.artist && m.artist.name) || '', image: m.album.image });
     else toast('No album info yet');
   }
   function goToCurrentArtist() {
     const m = state.npMeta;
-    if (m && m.artist && m.artist.id) openArtist(m.artist);
+    if (npMetaFresh() && m.artist && m.artist.id) openArtist(m.artist);
     else toast('No artist info yet');
   }
   function reloadPlaylistDetail(pid) {
@@ -1186,6 +1206,7 @@ const UI = (() => {
   }
   async function openArtist(artist) {
     if (!artist || !artist.id) { toast('No artist info'); return; }
+    const tok = (state.artistReq = (state.artistReq || 0) + 1);   // discard out-of-order results
     state.albumsSource = 'artist';
     state.albums = null;
     state.sel.albums = 0;
@@ -1193,7 +1214,7 @@ const UI = (() => {
     go('albums');
     let albums = [];
     try { albums = await SpotifyAPI.getArtistAlbums(artist.id); } catch (e) {}
-    if (state.view !== 'albums') return;            // user navigated away mid-fetch
+    if (state.artistReq !== tok || state.view !== 'albums') return;   // superseded / navigated away
     if (!albums.length) { el('grid-albums').innerHTML = emptyHTML('Couldn’t open ' + esc(artist.name || 'artist')); return; }
     state.albums = albums;
     renderAlbumGrid(albums);
@@ -1490,6 +1511,7 @@ const UI = (() => {
       if (e.target.closest('.am-card') == null) { closeActionMenu(); return; }  // tap backdrop = dismiss
       const row = e.target.closest('.am-item');
       if (!row || !state.menu) return;
+      Feedback.press();
       state.menu.sel = +row.dataset.i;
       menuActivate();
     });
