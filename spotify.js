@@ -219,13 +219,18 @@ const SpotifyAPI = (() => {
       }));
   }
 
-  // GET /v1/playlists/{id}/tracks -> [{ name, artist, image, duration_ms, uri }]
+  // GET /v1/playlists/{id}/items -> [{ name, artist, image, duration_ms, uri }]
+  // Spotify's Feb-2026 Web API change REMOVED /playlists/{id}/tracks (it now
+  // 403s) in favour of /items, and renamed each wrapper's `track` field to
+  // `item`. We read the new endpoint and accept either wrapper key. Note: the
+  // API now returns full contents only for the user's OWN playlists; others
+  // come back as metadata only (empty items) -> handled by the play fallback.
   // Skips local files and podcast episodes (not playable as plain track uris).
   async function getPlaylistTracks(playlistId) {
-    const data = await getJSON('/playlists/' + playlistId + '/tracks?limit=100');
+    const data = await getJSON('/playlists/' + playlistId + '/items?limit=100');
     if (!data || !data.items) return [];
     return data.items
-      .map(it => it.track)
+      .map(it => it.item || it.track)
       .filter(t => t && t.uri && !t.is_local && t.type === 'track')
       .map((t, i) => ({
         name: t.name,
