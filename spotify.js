@@ -478,7 +478,9 @@ const SpotifyAPI = (() => {
 
   // GET /v1/artists/{id}/albums -> [{ id, name, artist, image, year, uri }]
   async function getArtistAlbums(artistId) {
-    const data = await getJSON('/artists/' + artistId + '/albums?include_groups=album,single&limit=50');
+    // market=from_token is REQUIRED — without a market/country the catalog is
+    // "considered unavailable" and the endpoint returns an empty album list.
+    const data = await getJSON('/artists/' + artistId + '/albums?include_groups=album,single&market=from_token&limit=50');
     if (!data || !data.items) return [];
     const seen = {};
     return data.items.filter(Boolean).filter(al => {        // de-dupe re-releases by name
@@ -495,14 +497,18 @@ const SpotifyAPI = (() => {
     }));
   }
 
+  // The reference documents `uris` as a query param; the migration guide showed
+  // a JSON body. Send BOTH so whichever Spotify reads, the op lands.
   async function saveToLibrary(uris) {
     const list = Array.isArray(uris) ? uris : [uris];
-    const res = await api('/me/library', { method: 'PUT', body: { uris: list } });
+    const qs = '?uris=' + encodeURIComponent(list.join(','));
+    const res = await api('/me/library' + qs, { method: 'PUT', body: { uris: list } });
     return ok(res);
   }
   async function removeFromLibrary(uris) {
     const list = Array.isArray(uris) ? uris : [uris];
-    const res = await api('/me/library', { method: 'DELETE', body: { uris: list } });
+    const qs = '?uris=' + encodeURIComponent(list.join(','));
+    const res = await api('/me/library' + qs, { method: 'DELETE', body: { uris: list } });
     return ok(res);
   }
   async function addToPlaylist(playlistId, uris) {
@@ -510,9 +516,11 @@ const SpotifyAPI = (() => {
     const res = await api('/playlists/' + playlistId + '/items', { method: 'POST', body: { uris: list } });
     return ok(res);
   }
+  // Remove Playlist Items takes OBJECTS ({items:[{uri}]}), NOT bare uris like
+  // the add endpoint — Spotify's Feb-2026 rename kept the old tracks-object shape.
   async function removeFromPlaylist(playlistId, uris) {
     const list = Array.isArray(uris) ? uris : [uris];
-    const res = await api('/playlists/' + playlistId + '/items', { method: 'DELETE', body: { uris: list } });
+    const res = await api('/playlists/' + playlistId + '/items', { method: 'DELETE', body: { items: list.map(u => ({ uri: u })) } });
     return ok(res);
   }
   // GET /v1/me/library/contains?uris=... -> [bool] (parallel to the uris order)
