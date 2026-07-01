@@ -1667,6 +1667,12 @@ const UI = (() => {
       // ignore taps on the screen, the wheel, the keyboard, or the sign-in overlay
       if (e.target.closest('.screen') || e.target.closest('.wheel') ||
           e.target.closest('#keyboard') || e.target.closest('#signin')) return;
+      // Only the LOWER-LEFT corner of the metal body toggles the finish (a hidden
+      // spot), so incidental taps elsewhere on the body don't flip the colour.
+      const r = el('app').getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      if (!(x < 0.42 && y > 0.6)) return;
       Feedback.press();
       applyBodyTheme(!bodyIsGraphite());
     });
@@ -1778,7 +1784,13 @@ const UI = (() => {
     hideSignIn();
     Player.start();
     setMi(2);
-    go('menu');
+    // Default landing view: the Devices picker, so you first choose where to
+    // play. If a device is already active (decision already made), skip it and
+    // go to the menu instead. Show devices immediately so there's no menu flash.
+    go('devices');
+    SpotifyAPI.getActiveDevice().then(active => {
+      if (active && state.view === 'devices') go('menu');
+    }).catch(() => {});
   }
 
   if (document.readyState === 'loading') {
