@@ -1450,8 +1450,8 @@ const UI = (() => {
         if (delta > 0 && npSetPage(1)) Feedback.press();   // clockwise -> slide to the source's tracks
         return;                                            // page 0 has nothing else to scroll
       }
+      // Page 1 just navigates the track list; MENU is the only way back.
       const s = state.npSide, len = s.uris.length;
-      if (delta < 0 && (s.sel === 0 || !len)) { npSetPage(0); Feedback.press(); return; }   // up past top -> back
       if (len) {
         const before = s.sel;
         s.sel = clamp(before + delta, 0, len - 1);
