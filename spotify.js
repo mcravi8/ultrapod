@@ -290,6 +290,9 @@ const SpotifyAPI = (() => {
       // album + artist refs power "go to album / go to artist" from Now Playing
       album: t.album ? { id: t.album.id, uri: t.album.uri, name: t.album.name, image: largestImage(t.album.images) } : null,
       artists: (t.artists || []).map(a => ({ id: a.id, uri: a.uri, name: a.name })),
+      // playback context (which playlist/album we're playing FROM) — powers the
+      // Now Playing "slide to source tracks" pager.
+      context: data.context ? { uri: data.context.uri, type: data.context.type } : null,
       progress_ms: data.progress_ms || 0,
       duration_ms: t.duration_ms || 0,
       is_playing: !!data.is_playing,

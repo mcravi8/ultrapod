@@ -438,3 +438,35 @@ body {
 
 /* Now Playing title/artist are tappable shortcuts (album / artist) */
 .np-title, .np-artist { cursor: pointer; }
+
+/* ============================================================
+   NOW PLAYING PAGER (main <-> current source's tracks)
+   Two full-width pages side by side; the wheel snaps fully between them.
+   ============================================================ */
+.np-pager {
+  position: absolute; top: 0; left: 0; height: 100%; width: 200%;
+  display: flex;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.np-pager.show-side { transform: translateX(-50%); }
+.np-page { position: relative; flex: none; width: 50%; height: 100%; overflow: hidden; }
+.np-side-hint {
+  position: absolute; top: 16px; left: 0; right: 0; text-align: center;
+  font-size: 9.5px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #6a6a70;
+}
+.np-side-title {
+  position: absolute; top: 30px; left: 0; right: 0; text-align: center;
+  font-size: 14px; font-weight: 700; color: #fff; padding: 0 30px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.np-side-tracks {
+  position: absolute; top: 58px; left: 6px; right: 6px; bottom: 10px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+\n
+/* The Now Playing content now lives inside the absolute .np-pager, so the view's
+   flex-centering no longer reaches it. Center it on .np-main itself and let the
+   pager span the full width (main page owns the side inset). */
+#view-nowplaying.active { padding: 0; }
+.np-main { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 40px; }

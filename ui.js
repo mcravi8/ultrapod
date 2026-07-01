@@ -24,7 +24,10 @@ const UI = (() => {
     albums: null,
     detailUris: [],
     currentUri: null,
-    np: { progress_ms: 0, duration_ms: 0, is_playing: false, baseTime: 0 }
+    np: { progress_ms: 0, duration_ms: 0, is_playing: false, baseTime: 0 },
+    npContext: null,        // { uri, type, id } we're playing FROM
+    npPage: 0,              // 0 = Now Playing, 1 = source tracks (pager)
+    npSide: { loadedUri: null, tracks: [], uris: [], sel: 0, name: '' }
   };
 
   // menu item index -> action
@@ -283,6 +286,10 @@ const UI = (() => {
     const node = el(VIEW_ID[view]);
     if (node) node.classList.add('active');
 
+    // Always (re)enter Now Playing on the main page; reset the pager on any change.
+    state.npPage = 0;
+    const pager = el('np-pager'); if (pager) pager.classList.remove('show-side');
+
     if (view === 'nowplaying') startNpPoll(); else stopNpPoll();
 
     switch (view) {
@@ -305,6 +312,7 @@ const UI = (() => {
       else closeActionMenu();
       return;
     }
+    if (state.view === 'nowplaying' && state.npPage === 1) { npSetPage(0); return; }  // MENU backs out of the tracks page
     if (state.view === 'menu') go('nowplaying');
     else go('menu');
   }
@@ -544,7 +552,9 @@ const UI = (() => {
   // ===================================================================
   async function openAlbumDetail(album) {
     state.detailAlbum = album;            // reused for optimistic Now Playing art/artist
-    state.detailContextUri = null;        // albums play via the track-uri list
+    // Play the album in its own context (not a bare uri list) so Spotify reports
+    // "playing from <album>" — which powers the Now Playing -> source-tracks pager.
+    state.detailContextUri = album.id ? ('spotify:album:' + album.id) : null;
     state.detailPlaylist = null;          // not a playlist context
     setArt(el('detail-art'), album.image, album.id || album.name, 'album');
     el('detail-title').textContent = album.name;
@@ -657,6 +667,15 @@ const UI = (() => {
   // npMeta is trustworthy only when it describes the track that's actually
   // current — during the optimistic window currentUri jumps ahead of npMeta.
   function npMetaFresh() { return !!(state.npMeta && state.npMeta.trackUri && state.npMeta.trackUri === state.currentUri); }
+  // Track what we're playing FROM (playlist/album) for the source-tracks pager.
+  function setNpContext(ctx) {
+    if (ctx && ctx.uri) {
+      const parts = String(ctx.uri).split(':');   // spotify:playlist:ID
+      state.npContext = { uri: ctx.uri, type: ctx.type || parts[1] || '', id: parts.length === 3 ? parts[2] : null };
+    } else {
+      state.npContext = null;
+    }
+  }
 
   async function refreshNowPlaying() {
     let cur = null;
@@ -673,6 +692,7 @@ const UI = (() => {
       state.npOptimisticUntil = 0;                // real data for the new track arrived
       state.currentUri = cur.uri;
       setNpMeta(cur.album, cur.artists, cur.uri, cur.name);
+      setNpContext(cur.context);
       state.np = { progress_ms: cur.progress_ms, duration_ms: cur.duration_ms, is_playing: cur.is_playing, baseTime: Date.now() };
       // Only touch the Now Playing DOM if it's still the active view (a slow
       // fetch can resolve after the user navigated away).
@@ -682,8 +702,14 @@ const UI = (() => {
         setArt(el('np-art'), cur.image, cur.uri || cur.name, 'album');
         el('np-dur').textContent = fmtTime(cur.duration_ms);
         paintProgress();
+        // keep the source-tracks page's "now playing" highlight in step as songs advance
+        if (state.npPage === 1 && state.npContext && state.npSide.loadedUri === state.npContext.uri) updateNpSidePlaying();
       }
     } else if (state.view === 'nowplaying' && !optimistic) {
+      // Playback stopped: clear context + selection so a stale source page can't
+      // be slid to, and drop back to the main page.
+      setNpContext(null); state.currentUri = null;
+      state.npPage = 0; const _pg = el('np-pager'); if (_pg) _pg.classList.remove('show-side');
       // Reset the tracked state too, else the 500ms ticker keeps painting the
       // stale optimistic position on top (the "Nothing playing / 0:17" glitch).
       state.np = { progress_ms: 0, duration_ms: 0, is_playing: false, baseTime: Date.now() };
@@ -744,6 +770,7 @@ const UI = (() => {
     if (!cur) return;
     state.currentUri = cur.uri;
     setNpMeta(cur.album, cur.artists, cur.uri, cur.name);
+    setNpContext(s.context && s.context.uri ? { uri: s.context.uri } : null);
     state.np = { progress_ms: s.position, duration_ms: s.duration, is_playing: !s.paused, baseTime: Date.now() };
     if (state.view === 'nowplaying') {
       el('np-title').textContent = cur.name;
@@ -752,8 +779,106 @@ const UI = (() => {
       setArt(el('np-art'), img, cur.uri, 'album');
       el('np-dur').textContent = fmtTime(s.duration);
       paintProgress();
+      if (state.npPage === 1 && state.npContext && state.npSide.loadedUri === state.npContext.uri) updateNpSidePlaying();
     }
     if (state.view === 'albumdetail') renderTracks();
+  }
+
+  // ===================================================================
+  //  Now Playing pager: slide between the song and its source's tracks
+  // ===================================================================
+  function canSlideToSide() {
+    const c = state.npContext;
+    return !!(c && c.id && (c.type === 'playlist' || c.type === 'album'));
+  }
+  function npContextName() {
+    const c = state.npContext; if (!c) return '';
+    if (c.type === 'album') return (state.npMeta && state.npMeta.album && state.npMeta.album.name) || 'Album';
+    const pl = (state.playlists || []).filter(p => p.uri === c.uri)[0];
+    return pl ? pl.name : 'Playlist';
+  }
+  // NOTE: no Feedback.press() here — callers (buttons/taps already press; the
+  // scroll-flip in onScroll presses explicitly) own the click so it never doubles.
+  function npSetPage(page) {
+    page = page ? 1 : 0;
+    if (page === 1 && !canSlideToSide()) return false;
+    if (page === 1) loadNpSideTracks();          // lazy load / refresh for the current context
+    state.npPage = page;
+    const pager = el('np-pager');
+    if (pager) pager.classList.toggle('show-side', page === 1);
+    return true;
+  }
+  async function loadNpSideTracks() {
+    const c = state.npContext;
+    if (!c || !c.id) return;
+    if (state.npSide.loadedUri === c.uri && state.npSide.tracks.length) { renderNpSide(); applyNpSideSel(); return; }
+    el('np-side-title').textContent = npContextName();
+    el('np-side-tracks').innerHTML = loadingHTML();
+    let tracks = [];
+    try { tracks = c.type === 'album' ? await SpotifyAPI.getAlbumTracks(c.id) : await SpotifyAPI.getPlaylistTracks(c.id); }
+    catch (e) {}
+    if (!state.npContext || state.npContext.uri !== c.uri) return;   // context changed mid-fetch
+    const pi = tracks.findIndex(t => t.uri === state.currentUri);
+    state.npSide = { loadedUri: c.uri, tracks, uris: tracks.map(t => t.uri), sel: pi >= 0 ? pi : 0, name: npContextName() };
+    el('np-side-title').textContent = state.npSide.name;
+    renderNpSide();
+    applyNpSideSel();
+  }
+  function renderNpSide() {
+    const cont = el('np-side-tracks');
+    const tracks = state.npSide.tracks || [];
+    if (!tracks.length) { cont.innerHTML = emptyHTML(state.npContext && state.npContext.type === 'playlist' ? 'Spotify only lets this app list your own playlists.' : 'No tracks'); return; }
+    cont.innerHTML = tracks.map((t, idx) => {
+      const playing = state.currentUri && t.uri === state.currentUri;
+      const sel = state.npSide.sel === idx ? ' sel' : '';
+      const num = playing ? EQ_ICON : (idx + 1);
+      return '<div class="track-row' + (playing ? ' playing' : '') + sel + '" data-i="' + idx + '">' +
+        '<span class="track-num">' + num + '</span>' +
+        '<span class="track-name">' + esc(t.name) + '</span>' +
+        '<span class="track-dur">' + fmtTime(t.duration_ms) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+  function applyNpSideSel() {
+    const cont = el('np-side-tracks');
+    if (!cont) return null;
+    cont.querySelectorAll('[data-i]').forEach(n => n.classList.toggle('sel', +n.dataset.i === state.npSide.sel));
+    const node = cont.querySelector('[data-i="' + state.npSide.sel + '"]');
+    if (node && node.scrollIntoView) node.scrollIntoView({ block: 'nearest' });
+    return node;
+  }
+  // Move the "now playing" EQ highlight to the current track WITHOUT rebuilding
+  // the list (rebuild would reset the user's scroll position mid-browse).
+  function updateNpSidePlaying() {
+    const cont = el('np-side-tracks'); if (!cont) return;
+    cont.querySelectorAll('.track-row.playing').forEach(r => {
+      r.classList.remove('playing');
+      const num = r.querySelector('.track-num'); if (num) num.textContent = String((+r.dataset.i) + 1);
+    });
+    const idx = state.npSide.uris.indexOf(state.currentUri);
+    if (idx >= 0) {
+      const r = cont.querySelector('[data-i="' + idx + '"]');
+      if (r) { r.classList.add('playing'); const num = r.querySelector('.track-num'); if (num) num.innerHTML = EQ_ICON; }
+    }
+  }
+  function npSideActivate() {
+    const c = state.npContext, s = state.npSide;
+    const uri = s.uris[s.sel];
+    if (!uri || !c) return;
+    // Play IN CONTEXT for both album and playlist, so Spotify keeps reporting the
+    // source and the pager still works afterward (offset by the track uri).
+    afterPlay(SpotifyAPI.playContext(c.uri, uri));
+    const t = s.tracks[s.sel];
+    // Album rows carry no artist/image (they belong to the viewed album), so fall
+    // back to the current album's art/artist for an instant, correct paint.
+    if (t) showNowPlayingOptimistic({
+      name: t.name, uri, duration_ms: t.duration_ms,
+      artist: t.artist || (t.artistRef && t.artistRef.name),
+      image: t.image || (state.npMeta && state.npMeta.album && state.npMeta.album.image),
+      album: t.album || (state.npMeta && state.npMeta.album) || null,
+      artistRef: t.artistRef
+    });
+    npSetPage(0);                                                // slide back to show it playing
   }
 
   // ===================================================================
@@ -1062,6 +1187,12 @@ const UI = (() => {
   function currentContextItem() {
     const v = state.view;
     if (v === 'nowplaying') {
+      if (state.npPage === 1) {                 // on the source-tracks page: act on the HIGHLIGHTED track
+        const t = (state.npSide.tracks || [])[state.npSide.sel];
+        if (t) return { type: 'track', uri: t.uri, name: t.name,
+                        album: t.album || (state.npContext && state.npContext.type === 'album' && state.npMeta ? state.npMeta.album : null),
+                        artist: t.artistRef || null, inPlaylist: null };
+      }
       const fresh = npMetaFresh();              // album/artist only when they match the live track
       const m = state.npMeta;
       const uri = state.currentUri || (m && m.trackUri);
@@ -1275,7 +1406,10 @@ const UI = (() => {
       if (al) openAlbumDetail(al);
       return;
     }
-    if (v === 'nowplaying') { Player.togglePlay(); return; }
+    if (v === 'nowplaying') {
+      if (state.npPage === 1) { npSideActivate(); return; }   // play the highlighted source track
+      Player.togglePlay(); return;
+    }
     if (v === 'search') { searchCenter(); return; }
     // An un-listable (non-owned) playlist has no rows but a context — play it.
     if (v === 'albumdetail' && !(state.rows.albumdetail || []).length && state.detailContextUri) {
@@ -1311,6 +1445,18 @@ const UI = (() => {
       if (kbdOpen()) return;            // typing: the wheel is hidden, ignore stray scrolls
       node = searchScroll(delta);
       changed = node != null;
+    } else if (v === 'nowplaying') {
+      if (state.npPage === 0) {
+        if (delta > 0 && npSetPage(1)) Feedback.press();   // clockwise -> slide to the source's tracks
+        return;                                            // page 0 has nothing else to scroll
+      }
+      const s = state.npSide, len = s.uris.length;
+      if (delta < 0 && (s.sel === 0 || !len)) { npSetPage(0); Feedback.press(); return; }   // up past top -> back
+      if (len) {
+        const before = s.sel;
+        s.sel = clamp(before + delta, 0, len - 1);
+        if (s.sel !== before) { node = applyNpSideSel(); changed = true; }
+      }
     } else if (['playlists', 'artists', 'albums', 'albumdetail', 'devices'].indexOf(v) >= 0) {
       const rows = state.rows[v] || [];
       if (rows.length) {
@@ -1551,6 +1697,15 @@ const UI = (() => {
     // Now Playing: tap the title -> the song's album; tap the artist -> artist.
     el('np-title').addEventListener('click', () => { Feedback.press(); goToCurrentAlbum(); });
     el('np-artist').addEventListener('click', () => { Feedback.press(); goToCurrentArtist(); });
+
+    // Now Playing source-tracks page: tap a track to play it.
+    el('np-side-tracks').addEventListener('click', (e) => {
+      const row = e.target.closest('[data-i]');
+      if (!row) return;
+      Feedback.press();
+      state.npSide.sel = +row.dataset.i;
+      npSideActivate();
+    });
 
     // Context action menu: tap a row to run it (mirrors center on the wheel).
     el('action-menu').addEventListener('click', (e) => {
