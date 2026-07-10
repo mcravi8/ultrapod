@@ -27,14 +27,16 @@ const UI = (() => {
     np: { progress_ms: 0, duration_ms: 0, is_playing: false, baseTime: 0 },
     npContext: null,        // { uri, type, id } we're playing FROM
     npPage: 0,              // 0 = Now Playing, 1 = source tracks (pager)
-    npSide: { loadedUri: null, tracks: [], uris: [], sel: 0, name: '' }
+    npSide: { loadedUri: null, tracks: [], uris: [], sel: 0, name: '' },
+    game: null              // the live game instance (view === 'game')
   };
 
   // menu item index -> action
   const VIEW_ID = {
     menu: 'view-menu', nowplaying: 'view-nowplaying', coverflow: 'view-coverflow',
     playlists: 'view-playlists', artists: 'view-artists', albums: 'view-albums',
-    search: 'view-search', albumdetail: 'view-albumdetail', devices: 'view-devices'
+    search: 'view-search', albumdetail: 'view-albumdetail', devices: 'view-devices',
+    games: 'view-games', game: 'view-game'
   };
 
   // ---- small helpers -------------------------------------------------
@@ -261,7 +263,7 @@ const UI = (() => {
     ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click'].forEach(ev =>
       document.addEventListener(ev, prime, { capture: true, passive: true }));
 
-    return { resume, unlock, tick, press, haptic };
+    return { resume, unlock, tick, press, haptic, blip };
   })();
 
   // brief scale "pop" on a node to make the highlight feel tactile.
@@ -281,6 +283,7 @@ const UI = (() => {
   // ===================================================================
   function go(view) {
     if (view !== 'search') closeKeyboard();   // leaving search restores the wheel
+    if (view !== 'game') stopGame();          // leaving a game tears down its RAF loop
     state.view = view;
     Object.values(VIEW_ID).forEach(id => { const n = el(id); if (n) n.classList.remove('active'); });
     const node = el(VIEW_ID[view]);
@@ -300,7 +303,9 @@ const UI = (() => {
       case 'albums':     loadAlbums();    break;
       case 'search':     enterSearch();   break;
       case 'devices':    loadDevices();   break;
+      case 'games':      loadGames();     break;
       // nowplaying: startNpPoll() above already does the first refresh.
+      // game: launchGame() starts the instance right after go('game').
     }
   }
 
@@ -313,13 +318,14 @@ const UI = (() => {
       return;
     }
     if (state.view === 'nowplaying' && state.npPage === 1) { npSetPage(0); return; }  // MENU backs out of the tracks page
+    if (state.view === 'game') { go('games'); return; }   // MENU quits the game back to the games list
     if (state.view === 'menu') go('nowplaying');
     else go('menu');
   }
 
   // menu item activation
   function setMi(i) {
-    state.mi = clamp(i, 0, 5);
+    state.mi = clamp(i, 0, 6);
     document.querySelectorAll('#menu-sidebar .menu-item').forEach(node => {
       node.classList.toggle('active', +node.dataset.idx === state.mi);
     });
@@ -334,6 +340,7 @@ const UI = (() => {
       case 3: openAllMusic();   break;   // Songs = Liked Songs as a tracklist
       case 4: go('search');     break;
       case 5: go('devices');    break;
+      case 6: go('games');      break;
     }
   }
 
@@ -545,6 +552,41 @@ const UI = (() => {
       if (ok) { go('nowplaying'); }
       else toast('Could not switch to ' + d.name);
     }).catch(() => {});
+  }
+
+  // ===================================================================
+  //  Games (click-wheel arcade) — a list of games, then a live canvas.
+  //  Rotate the wheel to steer, center to serve/restart, MENU to quit.
+  // ===================================================================
+  function loadGames() {
+    const cont = el('list-games');
+    const list = (window.Games && Games.list) || [];
+    state.rows.games = list;
+    if (!list.length) { cont.innerHTML = emptyHTML('No games installed'); return; }
+    cont.innerHTML = list.map((g, idx) =>
+      '<div class="list-row game-row" data-idx="' + idx + '">' +
+        '<span class="game-ico">' + (g.icon || '') + '</span>' +
+        '<span class="game-meta">' +
+          '<span class="list-name">' + esc(g.name) + '</span>' +
+          '<span class="game-sub">' + esc(g.tagline || '') + '</span>' +
+        '</span>' +
+        '<span class="list-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg></span>' +
+      '</div>'
+    ).join('');
+    if (state.sel.games == null) state.sel.games = 0;
+    applySel('games');
+  }
+
+  function launchGame(id) {
+    if (!window.Games) { toast('Games unavailable'); return; }
+    go('game');            // switches view (and stopGame()s any prior instance)
+    Feedback.resume();     // make sure the audio context is live for game blips
+    state.game = Games.mount(id, el('game-canvas'), { sound: Feedback });
+    if (!state.game) { toast("Couldn't start game"); go('games'); }
+  }
+
+  function stopGame() {
+    if (state.game) { try { state.game.stop(); } catch (e) {} state.game = null; }
   }
 
   // ===================================================================
@@ -1112,7 +1154,8 @@ const UI = (() => {
       albums: el('grid-albums'),
       albumdetail: el('detail-tracks'),
       search: el('search-results'),
-      devices: el('list-devices')
+      devices: el('list-devices'),
+      games: el('list-games')
     })[view];
   }
   function applySel(view) {
@@ -1141,6 +1184,7 @@ const UI = (() => {
     else if (view === 'artists')   { afterPlay(SpotifyAPI.playContext(item.uri)); go('nowplaying'); }
     else if (view === 'albums')    { openAlbumDetail(item); }
     else if (view === 'devices')   { selectDevice(item); }
+    else if (view === 'games')     { launchGame(item.id); }
     else if (view === 'albumdetail') {
       // A playlist plays in its own context (queue/shuffle), offset by the
       // track's uri (robust to filtered items); albums & Liked Songs play from
@@ -1411,11 +1455,12 @@ const UI = (() => {
       Player.togglePlay(); return;
     }
     if (v === 'search') { searchCenter(); return; }
+    if (v === 'game')  { if (state.game) state.game.press(); return; }   // serve / restart
     // An un-listable (non-owned) playlist has no rows but a context — play it.
     if (v === 'albumdetail' && !(state.rows.albumdetail || []).length && state.detailContextUri) {
       afterPlay(SpotifyAPI.playContext(state.detailContextUri)); go('nowplaying'); return;
     }
-    if (['playlists', 'artists', 'albums', 'albumdetail', 'devices'].indexOf(v) >= 0) {
+    if (['playlists', 'artists', 'albums', 'albumdetail', 'devices', 'games'].indexOf(v) >= 0) {
       activate(v, state.sel[v] || 0);
     }
   }
@@ -1426,6 +1471,8 @@ const UI = (() => {
     if (menuOpen()) { menuScroll(delta); return; }   // context menu takes the wheel
     const v = state.view;
     let changed = false, node = null;
+
+    if (v === 'game') { if (state.game) state.game.move(delta); return; }  // steer the paddle
 
     if (v === 'menu') {
       const before = state.mi;
@@ -1457,7 +1504,7 @@ const UI = (() => {
         s.sel = clamp(before + delta, 0, len - 1);
         if (s.sel !== before) { node = applyNpSideSel(); changed = true; }
       }
-    } else if (['playlists', 'artists', 'albums', 'albumdetail', 'devices'].indexOf(v) >= 0) {
+    } else if (['playlists', 'artists', 'albums', 'albumdetail', 'devices', 'games'].indexOf(v) >= 0) {
       const rows = state.rows[v] || [];
       if (rows.length) {
         const before = state.sel[v] || 0;
@@ -1598,8 +1645,16 @@ const UI = (() => {
       if (holdTimer) clearTimeout(holdTimer);
       if (centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }
       if (menuOpen()) {
-        // Context menu is open: the wheel only navigates it (rotation -> onScroll
-        // -> menuScroll). Arm neither volume nor the menu-open hold.
+        // Context menu is open: the wheel only navigates it. Arm nothing.
+      } else if (state.view === 'game') {
+        // In a game the ring only steers (no volume). Center-hold triggers the
+        // game's secondary action (Minesweeper flag) if it has one.
+        if (e.target.closest('.wheel-center') && state.game && state.game.alt) {
+          centerHoldTimer = setTimeout(() => {
+            centerHoldTimer = null; wheelMoved = true;
+            Feedback.haptic(16); state.game.alt();
+          }, CENTER_HOLD_MS);
+        }
       } else if (e.target.closest('.wheel-center')) {
         // Long-press the CENTER -> context action menu. Don't arm volume (that's
         // a ring gesture); mark wheelMoved so the trailing click is swallowed.
@@ -1693,6 +1748,48 @@ const UI = (() => {
     el('grid-albums').addEventListener('click', rowClick('albums'));
     el('detail-tracks').addEventListener('click', rowClick('albumdetail'));
     el('list-devices').addEventListener('click', rowClick('devices'));
+    el('list-games').addEventListener('click', rowClick('games'));
+
+    // Game canvas: drag to steer; a clean tap = primary action (serve / reveal /
+    // restart); a long-press = secondary action (Minesweeper flag), matching the
+    // wheel's center-hold.
+    (() => {
+      const cv = el('game-canvas');
+      let dragged = false, downId = null, longFired = false, longTimer = null;
+      const fracAt = (e) => {
+        const r = cv.getBoundingClientRect();          // rect already reflects fitStage's scale
+        return { x: clamp((e.clientX - r.left) / r.width, 0, 1),
+                 y: clamp((e.clientY - r.top) / r.height, 0, 1) };
+      };
+      const clearLong = () => { if (longTimer) { clearTimeout(longTimer); longTimer = null; } };
+      cv.addEventListener('pointerdown', (e) => {
+        if (!state.game) return;
+        downId = e.pointerId; dragged = false; longFired = false;
+        const f = fracAt(e);
+        state.game.pointerAt(f.x, f.y);                // move the cursor/paddle to the touch
+        try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+        clearLong();
+        if (state.game.alt) longTimer = setTimeout(() => {
+          longTimer = null; longFired = true;
+          Feedback.haptic(16); state.game.alt();        // hold = flag
+        }, 380);
+        e.preventDefault();
+      });
+      cv.addEventListener('pointermove', (e) => {
+        if (downId == null || !state.game) return;
+        const f = fracAt(e);
+        state.game.pointerAt(f.x, f.y);
+        dragged = true; clearLong();                    // a drag is steering, not a tap/hold
+        e.preventDefault();
+      });
+      const up = () => {
+        if (downId == null) return;
+        downId = null; clearLong();
+        if (!dragged && !longFired && state.game) { Feedback.press(); state.game.press(); }
+      };
+      cv.addEventListener('pointerup', up);
+      cv.addEventListener('pointercancel', () => { downId = null; clearLong(); });
+    })();
 
     // Now Playing: tap the title -> the song's album; tap the artist -> artist.
     el('np-title').addEventListener('click', () => { Feedback.press(); goToCurrentAlbum(); });
@@ -1778,6 +1875,16 @@ const UI = (() => {
   function bindKeys() {
     window.addEventListener('keydown', (e) => {
       const typing = document.activeElement === el('search-input');
+      // In a game, the arrows steer, Enter/Space acts, F flags — nothing leaks
+      // through to track/menu navigation.
+      if (state.view === 'game' && state.game) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { state.game.move(-1); e.preventDefault(); return; }
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { state.game.move(1); e.preventDefault(); return; }
+        if (e.key === 'Enter' || e.key === ' ') { Feedback.press(); state.game.press(); e.preventDefault(); return; }
+        if (e.key === 'f' || e.key === 'F') { if (state.game.alt) { Feedback.haptic(16); state.game.alt(); } e.preventDefault(); return; }
+        if (e.key === 'Escape' || e.key === 'Backspace') { Feedback.press(); goMenu(); e.preventDefault(); return; }
+        return;   // swallow other keys while playing
+      }
       if (e.key === 'ArrowDown') { Feedback.resume(); onScroll(1); e.preventDefault(); }
       else if (e.key === 'ArrowUp') { Feedback.resume(); onScroll(-1); e.preventDefault(); }
       else if (e.key === 'Enter') { Feedback.press(); if (typing) kbdGo(); else onCenter(); }

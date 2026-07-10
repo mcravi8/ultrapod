@@ -199,6 +199,17 @@ body {
 .dev-meta .dev-sub  { font-size: 11px; color: #8e8e94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dev-dot { width: 8px; height: 8px; border-radius: 50%; background: #1ed760; flex: none; margin-right: 4px; box-shadow: 0 0 7px rgba(30,215,96,0.85); }
 
+/* ---- games list rows ---- */
+.game-ico { width: 38px; height: 38px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center; color: #c4c4cc; background: rgba(255,255,255,0.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+.list-row.sel .game-ico { color: #1ed760; }
+.game-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.game-meta .list-name { flex: none; }
+.game-meta .game-sub  { font-size: 11px; color: #8e8e94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- game canvas (full-screen play field) ---- */
+#view-game { background: #07080b; }
+.game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
 /* volume HUD: appears over the screen while pressing-and-circling the wheel */
 .vol-hud { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 60;
   display: none; align-items: center; gap: 11px; width: 76%; padding: 11px 15px; border-radius: 15px;
