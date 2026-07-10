@@ -1628,6 +1628,7 @@ const UI = (() => {
     const wheel = el('wheel');
     const STEP = 22;                       // degrees per scroll tick
     const drag = { active: false, last: 0, acc: 0 };
+    const padLast = { x: 0, y: 0 };        // last pointer pos, for trackpad-style game input
 
     // Re-read the rect each event: the wheel is transform-scaled by fitStage,
     // and an iOS URL-bar collapse mid-drag changes its on-screen center.
@@ -1641,6 +1642,7 @@ const UI = (() => {
       Feedback.resume();                   // unlock audio within the gesture
       drag.active = true; drag.acc = 0; wheelMoved = false; wheelDown = true;
       drag.last = angleAt(e);
+      padLast.x = e.clientX; padLast.y = e.clientY;
       holdMoved = 0;
       if (holdTimer) clearTimeout(holdTimer);
       if (centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }
@@ -1669,6 +1671,32 @@ const UI = (() => {
     });
     wheel.addEventListener('pointermove', (e) => {
       if (!drag.active) return;
+
+      // In a game the whole wheel is the controller — bypass list-scroll/volume.
+      //  · spin games (Brick): feed the continuous rotation so the paddle glides.
+      //  · pad games (Snake/Minesweeper): feed the finger's movement vector, so
+      //    swiping a direction steers that way — the wheel acts like a trackpad.
+      if (state.view === 'game' && state.game) {
+        const g = state.game;
+        if (g.spin) {
+          const a = angleAt(e);
+          let d = a - drag.last;
+          if (d > 180) d -= 360; if (d < -180) d += 360;
+          drag.last = a;
+          g.spin(d);
+          wheelMoved = true;
+        } else if (g.pad) {
+          const dx = e.clientX - padLast.x, dy = e.clientY - padLast.y;
+          padLast.x = e.clientX; padLast.y = e.clientY;
+          holdMoved += Math.abs(dx) + Math.abs(dy);
+          if (holdMoved > 10 && centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }
+          g.pad(dx, dy);
+          wheelMoved = true;
+        }
+        e.preventDefault();
+        return;
+      }
+
       const a = angleAt(e);
       let d = a - drag.last;
       if (d > 180) d -= 360; if (d < -180) d += 360;
@@ -1878,10 +1906,13 @@ const UI = (() => {
       // In a game, the arrows steer, Enter/Space acts, F flags — nothing leaks
       // through to track/menu navigation.
       if (state.view === 'game' && state.game) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { state.game.move(-1); e.preventDefault(); return; }
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { state.game.move(1); e.preventDefault(); return; }
-        if (e.key === 'Enter' || e.key === ' ') { Feedback.press(); state.game.press(); e.preventDefault(); return; }
-        if (e.key === 'f' || e.key === 'F') { if (state.game.alt) { Feedback.haptic(16); state.game.alt(); } e.preventDefault(); return; }
+        const g = state.game, D = 40;   // pad-games read arrows as directional swipes
+        if (e.key === 'ArrowLeft')  { g.pad ? g.pad(-D, 0) : g.move(-1); e.preventDefault(); return; }
+        if (e.key === 'ArrowRight') { g.pad ? g.pad(D, 0)  : g.move(1);  e.preventDefault(); return; }
+        if (e.key === 'ArrowUp')    { g.pad ? g.pad(0, -D) : g.move(-1); e.preventDefault(); return; }
+        if (e.key === 'ArrowDown')  { g.pad ? g.pad(0, D)  : g.move(1);  e.preventDefault(); return; }
+        if (e.key === 'Enter' || e.key === ' ') { Feedback.press(); g.press(); e.preventDefault(); return; }
+        if (e.key === 'f' || e.key === 'F') { if (g.alt) { Feedback.haptic(16); g.alt(); } e.preventDefault(); return; }
         if (e.key === 'Escape' || e.key === 'Backspace') { Feedback.press(); goMenu(); e.preventDefault(); return; }
         return;   // swallow other keys while playing
       }

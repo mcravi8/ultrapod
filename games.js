@@ -78,7 +78,8 @@ const Games = (() => {
     const PADDLE_W0 = 64, PADDLE_H = 10;
     const PADDLE_Y = CSSH - 34;
     const BALL_R = 5;
-    const WHEEL_STEP = 24;
+    const WHEEL_STEP = 24;            // px per keyboard/step
+    const PX_PER_DEG = 1.9;           // smooth wheel: paddle px per degree of rotation
 
     const ROW_COLOR = ['#ff5d5d', '#ff9f43', '#ffd93d', '#4bd07a', '#4aa3ff'];
 
@@ -140,6 +141,12 @@ const Games = (() => {
     }
     function move(dir) {
       paddle.x += dir * WHEEL_STEP;
+      clampPaddle();
+      if (phase === 'ready') ball.x = paddle.x + paddle.w / 2;
+    }
+    // smooth wheel: continuous angular delta (deg) -> proportional paddle glide
+    function spin(deg) {
+      paddle.x += deg * PX_PER_DEG;
       clampPaddle();
       if (phase === 'ready') ball.x = paddle.x + paddle.w / 2;
     }
@@ -258,13 +265,12 @@ const Games = (() => {
 
     newGame();
     raf = requestAnimationFrame(frame);
-    return { move, pointerAt, press, stop };
+    return { move, spin, pointerAt, press, stop };
   }
 
   // ================================================================
-  //  SNAKE — rotate the wheel to turn. Eat, grow, don't bite yourself.
-  //  Rotating clockwise turns right, counter-clockwise turns left —
-  //  a natural fit for a circular controller.
+  //  SNAKE — the whole wheel is a trackpad: swipe a direction and the
+  //  snake heads that way. (Rotary/keyboard turning kept as a fallback.)
   // ================================================================
   function makeSnake(canvas, opts) {
     const ctx = fitCanvas(canvas);
@@ -299,12 +305,28 @@ const Games = (() => {
       place();
       phase = 'ready';
     }
+    let padAcc = { x: 0, y: 0 };
+    function setHeading(d) {                          // d: 0=R 1=D 2=L 3=U (absolute)
+      if (phase === 'over') return;
+      if (phase === 'ready') phase = 'playing';
+      if ((d + 2) % 4 === dir) return;                // ignore 180° reversal into self
+      nextDir = d;
+    }
     function move(d) {
       if (phase === 'over') return;
       if (phase === 'ready') phase = 'playing';
-      nextDir = (dir + (d > 0 ? 1 : -1) + 4) % 4;   // turn relative to heading
+      nextDir = (dir + (d > 0 ? 1 : -1) + 4) % 4;     // relative turn (wheel-scroll / fallback)
     }
-    function pointerAt() {}                           // snake ignores drag position
+    // trackpad: swipe direction -> absolute heading (dominant axis wins)
+    function pad(dx, dy) {
+      padAcc.x += dx; padAcc.y += dy;
+      const TH = 16;
+      if (Math.abs(padAcc.x) < TH && Math.abs(padAcc.y) < TH) return;
+      if (Math.abs(padAcc.x) >= Math.abs(padAcc.y)) setHeading(padAcc.x > 0 ? 0 : 2);  // R : L
+      else setHeading(padAcc.y > 0 ? 1 : 3);                                           // D : U
+      padAcc.x = 0; padAcc.y = 0;
+    }
+    function pointerAt() {}                           // snake ignores absolute drag position
     function press() {
       if (phase === 'ready') { phase = 'playing'; return; }
       if (phase === 'over') { newGame(); return; }
@@ -372,11 +394,13 @@ const Games = (() => {
 
     newGame();
     raf = requestAnimationFrame(frame);
-    return { move, pointerAt, press, stop };
+    return { move, pad, pointerAt, press, stop };
   }
 
   // ================================================================
-  //  MINESWEEPER — rotate to move the cursor, press ● to reveal,
+  //  MINESWEEPER — the whole wheel is a trackpad: swipe to move the
+  //  cursor, press ● to reveal, press-and-hold to flag.
+  //  (Rotary/keyboard cursor stepping kept as a fallback.)
   //  press-and-hold (center-hold / long-press / F) to flag.
   //  9x9, 10 mines, first reveal is always safe.
   // ================================================================
@@ -461,6 +485,16 @@ const Games = (() => {
     }
 
     function move(d) { let i = I(cur.x, cur.y); i = (i + (d > 0 ? 1 : -1) + N * N) % (N * N); cur.x = i % N; cur.y = (i / N) | 0; }
+    // trackpad: swipe moves the cursor cell-by-cell (both axes)
+    let padAcc = { x: 0, y: 0 };
+    function pad(dx, dy) {
+      padAcc.x += dx; padAcc.y += dy;
+      const TH = 20;
+      while (padAcc.x >= TH)  { cur.x = Math.min(N - 1, cur.x + 1); padAcc.x -= TH; }
+      while (padAcc.x <= -TH) { cur.x = Math.max(0, cur.x - 1);     padAcc.x += TH; }
+      while (padAcc.y >= TH)  { cur.y = Math.min(N - 1, cur.y + 1); padAcc.y -= TH; }
+      while (padAcc.y <= -TH) { cur.y = Math.max(0, cur.y - 1);     padAcc.y += TH; }
+    }
     function pointerAt(fx, fy) {
       const x = Math.floor((fx * CSSW - OX) / CELL), y = Math.floor((fy * CSSH - OY) / CELL);
       if (inb(x, y)) { cur.x = x; cur.y = y; }
@@ -520,7 +554,7 @@ const Games = (() => {
 
     newGame();
     raf = requestAnimationFrame(frame);
-    return { move, pointerAt, press, alt, stop };
+    return { move, pad, pointerAt, press, alt, stop };
   }
 
   // ---- registry -------------------------------------------------------
