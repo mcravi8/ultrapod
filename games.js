@@ -409,12 +409,13 @@ const Games = (() => {
     const sound = opts && opts.sound ? opts.sound : SILENT;
 
     const HUD_H = 34;
-    const N = 9, MINES = 10;
-    const MARGIN = 18;
+    const N = 12, MINES = 22;
+    const MARGIN = 12;
     const CELL = Math.floor((CSSW - 2 * MARGIN) / N);
     const BW = CELL * N;
     const OX = Math.round((CSSW - BW) / 2);
     const OY = HUD_H + 10;
+    const NUMF = Math.max(11, Math.round(CELL * 0.6));   // number font, scales with cell
 
     const NUMCOL = [null, '#4aa3ff', '#4bd07a', '#ff6b6b', '#b48cff', '#ff9f43', '#31c7c7', '#e6e6ea', '#9aa0ad'];
 
@@ -489,7 +490,7 @@ const Games = (() => {
     let padAcc = { x: 0, y: 0 };
     function pad(dx, dy) {
       padAcc.x += dx; padAcc.y += dy;
-      const TH = 20;
+      const TH = 16;
       while (padAcc.x >= TH)  { cur.x = Math.min(N - 1, cur.x + 1); padAcc.x -= TH; }
       while (padAcc.x <= -TH) { cur.x = Math.max(0, cur.x - 1);     padAcc.x += TH; }
       while (padAcc.y >= TH)  { cur.y = Math.min(N - 1, cur.y + 1); padAcc.y -= TH; }
@@ -525,7 +526,7 @@ const Games = (() => {
           } else if (cell.adj > 0) {
             ctx.fillStyle = NUMCOL[cell.adj] || '#eaeaea';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.font = '700 16px -apple-system, system-ui, sans-serif';
+            ctx.font = '700 ' + NUMF + 'px -apple-system, system-ui, sans-serif';
             ctx.fillText(String(cell.adj), px + CELL / 2, py + CELL / 2 + 1);
           }
         } else {
@@ -536,7 +537,7 @@ const Games = (() => {
           if (cell.flag) {
             ctx.fillStyle = '#ff6b6b';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.font = '700 15px -apple-system, system-ui, sans-serif';
+            ctx.font = '700 ' + NUMF + 'px -apple-system, system-ui, sans-serif';
             ctx.fillText('⚑', px + CELL / 2, py + CELL / 2 + 1);
           }
         }
@@ -557,6 +558,134 @@ const Games = (() => {
     return { move, pad, pointerAt, press, alt, stop };
   }
 
+  // ================================================================
+  //  ACE — a jet at the bottom auto-fires upward; rotate the wheel to
+  //  slide it (smooth, like Brick) and line up the falling blocks.
+  //  Center fires an extra shot. Don't let anything reach the ground.
+  // ================================================================
+  function makeAce(canvas, opts) {
+    const ctx = fitCanvas(canvas);
+    const sound = opts && opts.sound ? opts.sound : SILENT;
+
+    const HUD_H = 30;
+    const GROUND_Y = CSSH - 22;
+    const PLANE_W = 34, PLANE_H = 16;
+    const PLANE_Y = GROUND_Y - PLANE_H;
+    const PX_PER_DEG = 2.0;          // smooth wheel
+    const MOVE_STEP = 26;            // keyboard / fallback
+    const BULLET_VY = -340, FIRE_MS = 240;
+    const ENEMY_COLORS = ['#ff5d5d', '#ff9f43', '#ffd93d', '#4aa3ff', '#b48cff'];
+
+    let hi = 0;
+    try { hi = parseInt(localStorage.getItem('ultrapod_ace_hi') || '0', 10) || 0; } catch (e) {}
+
+    let plane, bullets, enemies, score, lives, phase, fireAcc, spawnAcc, elapsed;
+    let raf = null, last = 0, alive = true;
+
+    function newGame() {
+      plane = { x: (CSSW - PLANE_W) / 2 };
+      bullets = []; enemies = [];
+      score = 0; lives = 3; phase = 'ready';
+      fireAcc = 0; spawnAcc = 0; elapsed = 0;
+    }
+    function clampPlane() {
+      const min = 8, max = CSSW - 8 - PLANE_W;
+      if (plane.x < min) plane.x = min;
+      if (plane.x > max) plane.x = max;
+    }
+    function spin(deg) { plane.x += deg * PX_PER_DEG; clampPlane(); }
+    function move(d) { plane.x += d * MOVE_STEP; clampPlane(); }
+    function pointerAt(fx) { plane.x = fx * CSSW - PLANE_W / 2; clampPlane(); }
+    function fire() { bullets.push({ x: plane.x + PLANE_W / 2, y: PLANE_Y - 2 }); sound.blip(880, 0.03, 0.03, 'square'); }
+    function press() {
+      if (phase === 'ready') { phase = 'playing'; return; }
+      if (phase === 'over') { newGame(); return; }
+      fire();                        // manual extra shot during play
+    }
+    function spawnEnemy() {
+      const w = 18 + Math.floor(Math.random() * 16);
+      const x = 8 + Math.random() * (CSSW - 16 - w);
+      const speed = 70 + Math.random() * 40 + elapsed * 4;   // faster over time
+      enemies.push({ x, y: -18, w, h: 14, vy: speed, color: ENEMY_COLORS[Math.floor(Math.random() * ENEMY_COLORS.length)] });
+    }
+    function loseLife() {
+      lives--;
+      sound.blip(180, 0.09, 0.22, 'sawtooth'); sound.haptic(20);
+      if (lives <= 0) { phase = 'over'; if (score > hi) { hi = score; try { localStorage.setItem('ultrapod_ace_hi', String(hi)); } catch (e) {} } }
+    }
+
+    function step(dt) {
+      if (phase !== 'playing') return;
+      elapsed += dt;
+      fireAcc += dt * 1000;
+      while (fireAcc >= FIRE_MS) { fireAcc -= FIRE_MS; fire(); }
+      spawnAcc += dt * 1000;
+      const spawnMs = Math.max(420, 1100 - elapsed * 12);
+      while (spawnAcc >= spawnMs) { spawnAcc -= spawnMs; spawnEnemy(); }
+
+      for (const b of bullets) b.y += BULLET_VY * dt;
+      bullets = bullets.filter(b => b.y > HUD_H - 12);
+      for (const e of enemies) e.y += e.vy * dt;
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        let hit = false;
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (b.x >= e.x && b.x <= e.x + e.w && b.y <= e.y + e.h && b.y >= e.y) { hit = true; bullets.splice(j, 1); break; }
+        }
+        if (hit) { enemies.splice(i, 1); score += 10; sound.blip(760, 0.05, 0.04, 'square'); sound.haptic(6); continue; }
+        if (e.y + e.h >= GROUND_Y) { enemies.splice(i, 1); loseLife(); }
+      }
+    }
+
+    function drawPlane() {
+      const cx = plane.x + PLANE_W / 2;
+      ctx.fillStyle = '#1ed760';
+      ctx.beginPath();
+      ctx.moveTo(cx, PLANE_Y);
+      ctx.lineTo(plane.x, PLANE_Y + PLANE_H);
+      ctx.lineTo(plane.x + PLANE_W, PLANE_Y + PLANE_H);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.30)';
+      ctx.fillRect(cx - 2, PLANE_Y + 3, 4, PLANE_H - 5);
+    }
+    function draw() {
+      ctx.fillStyle = '#07080b'; ctx.fillRect(0, 0, CSSW, CSSH);
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.font = '600 13px -apple-system, "SF Pro Text", system-ui, sans-serif';
+      ctx.fillStyle = '#eaeaea'; ctx.fillText(String(score).padStart(4, '0'), 12, HUD_H / 2 + 1);
+      ctx.fillStyle = '#6a6a70'; ctx.font = '600 10px -apple-system, "SF Pro Text", system-ui, sans-serif';
+      ctx.fillText('HI ' + Math.max(hi, score), 66, HUD_H / 2 + 1);
+      for (let i = 0; i < lives; i++) { ctx.fillStyle = '#1ed760'; ctx.beginPath(); ctx.arc(CSSW - 14 - i * 15, HUD_H / 2 + 1, 4, 0, Math.PI * 2); ctx.fill(); }
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, GROUND_Y + 0.5); ctx.lineTo(CSSW, GROUND_Y + 0.5); ctx.stroke();
+
+      for (const e of enemies) { ctx.fillStyle = e.color; roundRect(ctx, e.x, e.y, e.w, e.h, 3); ctx.fill(); }
+      ctx.fillStyle = '#ffffff';
+      for (const b of bullets) ctx.fillRect(b.x - 1.5, b.y, 3, 10);
+      drawPlane();
+
+      if (phase === 'ready') drawBanner(ctx, 'ACE', 'rotate to move · ● to start');
+      else if (phase === 'over') drawBanner(ctx, 'GAME OVER', 'press ● to play again');
+    }
+
+    function frame(now) {
+      if (!alive) return;
+      if (!last) last = now;
+      let dt = (now - last) / 1000; last = now;
+      if (dt > 1 / 30) dt = 1 / 30;
+      step(dt); draw();
+      raf = requestAnimationFrame(frame);
+    }
+    function stop() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = null; } }
+
+    newGame();
+    raf = requestAnimationFrame(frame);
+    return { move, spin, pointerAt, press, stop };
+  }
+
   // ---- registry -------------------------------------------------------
   const REGISTRY = [
     {
@@ -570,6 +699,10 @@ const Games = (() => {
     {
       id: 'mines', name: 'Minesweeper', tagline: 'Clear the field · flag the mines', make: makeMinesweeper,
       icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="3" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="21"></line><line x1="3" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="21" y2="12"></line><line x1="5.6" y1="5.6" x2="7.7" y2="7.7"></line><line x1="16.3" y1="16.3" x2="18.4" y2="18.4"></line><line x1="5.6" y1="18.4" x2="7.7" y2="16.3"></line><line x1="16.3" y1="7.7" x2="18.4" y2="5.6"></line></svg>'
+    },
+    {
+      id: 'ace', name: 'Ace', tagline: 'Fly · shoot · don’t let them land', make: makeAce,
+      icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 15-7-4-7 4 7-15z" fill="currentColor" stroke="none"></path></svg>'
     }
   ];
 
